@@ -114,6 +114,9 @@
   "typescript.tsdk": "ts/.yarn/sdks/typescript/lib",
   "typescript.enablePromptUseWorkspaceTsdk": true,
   "eslint.nodePath": "ts/.yarn/sdks",
+  "eslint.codeActionsOnSave.rules": [
+    "!jsdoc/*"
+  ],
   "prettier.prettierPath": "ts/.yarn/sdks/prettier/index.js",
   "[cpp]": {
     "editor.defaultFormatter": "ms-vscode.cpptools"
