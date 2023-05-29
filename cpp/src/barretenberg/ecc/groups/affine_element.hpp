@@ -3,7 +3,6 @@
 #include <vector>
 #include <type_traits>
 #include "barretenberg/ecc/curves/bn254/fq2.hpp"
-#include "barretenberg/serialize/msgpack.hpp"
 
 namespace barretenberg {
 namespace group_elements {
@@ -32,43 +31,20 @@ template <typename Fq, typename Fr, typename Params> class alignas(64) affine_el
               typename CompileTimeEnabled = std::enable_if_t<(BaseField::modulus >> 255) == uint256_t(0), void>>
     static constexpr affine_element from_compressed(const uint256_t& compressed) noexcept;
 
-    /**
-     * @brief Reconstruct a point in affine coordinates from compressed form.
-     * @details #LARGE_MODULUS_AFFINE_POINT_COMPRESSION Point compression is implemented for curves of a prime
-     * field F_p with p being 256 bits.
-     * TODO(Suyash): Check with kesha if this is correct.
-     *
-     * @param compressed compressed point
-     * @return constexpr affine_element
-     */
-    template <typename BaseField = Fq,
-              typename CompileTimeEnabled = std::enable_if_t<(BaseField::modulus >> 255) == uint256_t(1), void>>
-    static constexpr std::array<affine_element, 2> from_compressed_unsafe(const uint256_t& compressed) noexcept;
-
     constexpr affine_element& operator=(const affine_element& other) noexcept;
 
     constexpr affine_element& operator=(affine_element&& other) noexcept;
-
-    constexpr affine_element operator+(const affine_element& other) const noexcept;
 
     template <typename BaseField = Fq,
               typename CompileTimeEnabled = std::enable_if_t<(BaseField::modulus >> 255) == uint256_t(0), void>>
     constexpr uint256_t compress() const noexcept;
 
-    static affine_element infinity();
     constexpr affine_element set_infinity() const noexcept;
     constexpr void self_set_infinity() noexcept;
 
     constexpr bool is_point_at_infinity() const noexcept;
 
     constexpr bool on_curve() const noexcept;
-
-    /**
-     * @brief Samples a random point on the curve.
-     *
-     * @return A randomly chosen point on the curve
-     */
-    static affine_element random_element(numeric::random::Engine* engine = nullptr) noexcept;
 
     /**
      * @brief Hash a seed value to curve.
@@ -177,8 +153,6 @@ template <typename Fq, typename Fr, typename Params> class alignas(64) affine_el
     }
     Fq x;
     Fq y;
-    // for serialization: update with new fields
-    MSGPACK_FIELDS(x, y);
 };
 
 template <typename B, typename Fq, typename Fr, typename Params> void read(B& it, affine_element<Fq, Fr, Params>& value)

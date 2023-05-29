@@ -1,13 +1,13 @@
 #pragma once
 
-#include "barretenberg/plonk/proof_system/proving_key/proving_key.hpp"
+#include "barretenberg/proof_system/proving_key/proving_key.hpp"
 #include "barretenberg/transcript/transcript.hpp"
 #include "barretenberg/polynomials/iterate_over_domain.hpp"
 #include "barretenberg/ecc/curves/bn254/scalar_multiplication/scalar_multiplication.hpp"
 #include "barretenberg/polynomials/polynomial_arithmetic.hpp"
 #include "barretenberg/common/mem.hpp"
 
-namespace proof_system::plonk {
+namespace plonk {
 
 template <const size_t num_roots_cut_out_of_vanishing_polynomial>
 ProverPlookupWidget<num_roots_cut_out_of_vanishing_polynomial>::ProverPlookupWidget(proving_key* input_key)
@@ -358,7 +358,7 @@ void ProverPlookupWidget<num_roots_cut_out_of_vanishing_polynomial>::compute_rou
             .work_type = work_queue::WorkType::SCALAR_MULTIPLICATION,
             .mul_scalars = s.get_coefficients(),
             .tag = "S",
-            .constant = key->circuit_size,
+            .constant = barretenberg::fr(0),
             .index = 0,
         });
 
@@ -382,7 +382,7 @@ void ProverPlookupWidget<num_roots_cut_out_of_vanishing_polynomial>::compute_rou
             .work_type = work_queue::WorkType::SCALAR_MULTIPLICATION,
             .mul_scalars = z.get_coefficients(),
             .tag = "Z_LOOKUP",
-            .constant = key->circuit_size,
+            .constant = barretenberg::fr(0),
             .index = 0,
         });
 
@@ -734,7 +734,7 @@ Field VerifierPlookupWidget<Field, Group, Transcript, num_roots_cut_out_of_vanis
     T0 = numerator - denominator;
     quotient_numerator_eval += T0 * alpha_base;
     return alpha_base * alpha.sqr() * alpha;
-} // namespace proof_system::plonk
+} // namespace plonk
 
 template <typename Field, typename Group, typename Transcript, const size_t num_roots_cut_out_of_vanishing_polynomial>
 Field VerifierPlookupWidget<Field, Group, Transcript, num_roots_cut_out_of_vanishing_polynomial>::
@@ -751,4 +751,4 @@ template class VerifierPlookupWidget<barretenberg::fr,
                                      barretenberg::g1::affine_element,
                                      transcript::StandardTranscript>;
 
-} // namespace proof_system::plonk
+} // namespace plonk

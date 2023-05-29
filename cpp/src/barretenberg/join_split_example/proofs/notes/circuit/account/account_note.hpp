@@ -1,13 +1,14 @@
 #pragma once
-#include "barretenberg/join_split_example/types.hpp"
+#include "barretenberg/stdlib/types/types.hpp"
 #include "commit.hpp"
-#include "barretenberg/join_split_example/types.hpp"
 
 namespace join_split_example {
 namespace proofs {
 namespace notes {
 namespace circuit {
 namespace account {
+
+using namespace plonk::stdlib::types;
 
 struct account_note {
     field_ct account_alias_hash;

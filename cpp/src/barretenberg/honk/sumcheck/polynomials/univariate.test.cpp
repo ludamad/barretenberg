@@ -5,7 +5,7 @@
 #include <gtest/gtest.h>
 #include "barretenberg/numeric/random/engine.hpp"
 
-using namespace proof_system::honk::sumcheck;
+using namespace honk::sumcheck;
 namespace test_univariate {
 
 template <typename FF> class UnivariateTest : public testing::Test {

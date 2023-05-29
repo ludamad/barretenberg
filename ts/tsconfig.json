@@ -1,11 +1,7 @@
 {
   "compilerOptions": {
     "target": "es2020",
-    "lib": [
-      "dom",
-      "esnext",
-      "es2017.object"
-    ],
+    "lib": ["dom", "esnext", "es2017.object"],
     "module": "NodeNext",
     "strict": true,
     "declaration": true,
@@ -22,7 +18,5 @@
     "rootDir": "src",
     "tsBuildInfoFile": ".tsbuildinfo"
   },
-  "include": [
-    "src"
-  ]
+  "include": ["src"]
 }

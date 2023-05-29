@@ -3,16 +3,17 @@
 #include "../field/field.hpp"
 #include "barretenberg/ecc/curves/grumpkin/grumpkin.hpp"
 #include "barretenberg/plonk/composer/composer_base.hpp"
-#include "barretenberg/crypto/pedersen_commitment/pedersen.hpp"
+#include "barretenberg/crypto/pedersen/pedersen.hpp"
 
 #include "../../hash/pedersen/pedersen.hpp"
-#include "../../hash/pedersen/pedersen_gates.hpp"
 
-namespace proof_system::plonk {
+using namespace bonk;
+
+namespace plonk {
 namespace stdlib {
 
 using namespace barretenberg;
-using namespace crypto::generators;
+using namespace crypto::pedersen;
 
 template <typename ComposerContext> class group {
   public:
@@ -135,7 +136,7 @@ auto group<ComposerContext>::fixed_base_scalar_mul_internal(const field_t<Compos
     fr three = ((one + one) + one);
 
     for (size_t i = 0; i < num_quads; ++i) {
-        uint64_t entry = wnaf_entries[i + 1] & WNAF_MASK;
+        uint64_t entry = wnaf_entries[i + 1] & stdlib::WNAF_MASK;
 
         fr prev_accumulator = accumulator_transcript[i] + accumulator_transcript[i];
         prev_accumulator = prev_accumulator + prev_accumulator;
@@ -161,7 +162,6 @@ auto group<ComposerContext>::fixed_base_scalar_mul_internal(const field_t<Compos
 
     fr x_alpha = accumulator_offset;
     std::vector<uint32_t> accumulator_witnesses;
-    pedersen_gates<ComposerContext> pedersen_gates(ctx);
     for (size_t i = 0; i < num_quads; ++i) {
         fixed_group_add_quad round_quad;
         round_quad.d = ctx->add_variable(accumulator_transcript[i]);
@@ -187,9 +187,9 @@ auto group<ComposerContext>::fixed_base_scalar_mul_internal(const field_t<Compos
         round_quad.q_y_2 = ladder[i + 1].q_y_2;
 
         if (i > 0) {
-            pedersen_gates.create_fixed_group_add_gate(round_quad);
+            ctx->create_fixed_group_add_gate(round_quad);
         } else {
-            pedersen_gates.create_fixed_group_add_gate_with_init(round_quad, init_quad);
+            ctx->create_fixed_group_add_gate_with_init(round_quad, init_quad);
         }
         accumulator_witnesses.push_back(round_quad.d);
     }
@@ -207,7 +207,7 @@ auto group<ComposerContext>::fixed_base_scalar_mul_internal(const field_t<Compos
     accumulator_witnesses.push_back(add_quad.d);
 
     if (num_bits >= 254) {
-        plonk::stdlib::pedersen_hash<ComposerContext>::validate_wnaf_is_in_field(ctx, accumulator_witnesses);
+        plonk::stdlib::pedersen<ComposerContext>::validate_wnaf_is_in_field(ctx, accumulator_witnesses);
     }
     aligned_free(multiplication_transcript);
     aligned_free(accumulator_transcript);
@@ -235,4 +235,4 @@ auto group<ComposerContext>::fixed_base_scalar_mul_internal(const field_t<Compos
 // static point variable_base_mul(const point& p, const field_t& s);
 
 } // namespace stdlib
-} // namespace proof_system::plonk
+} // namespace plonk

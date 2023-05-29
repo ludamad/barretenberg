@@ -4,7 +4,7 @@
 #include "polynomial_store.hpp"
 #include "barretenberg/polynomials/polynomial.hpp"
 
-namespace proof_system {
+namespace bonk {
 
 using namespace barretenberg;
 using Fr = barretenberg::fr;
@@ -111,4 +111,4 @@ TEST(PolynomialStore, RangeBasedFor)
     }
 }
 
-} // namespace proof_system
+} // namespace bonk

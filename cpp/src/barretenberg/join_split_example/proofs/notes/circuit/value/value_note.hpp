@@ -1,5 +1,5 @@
 #pragma once
-#include "barretenberg/join_split_example/types.hpp"
+#include "barretenberg/stdlib/types/types.hpp"
 #include "witness_data.hpp"
 #include "commit.hpp"
 
@@ -9,7 +9,7 @@ namespace notes {
 namespace circuit {
 namespace value {
 
-using namespace proof_system::plonk::stdlib;
+using namespace plonk::stdlib::types;
 
 struct value_note {
     point_ct owner;

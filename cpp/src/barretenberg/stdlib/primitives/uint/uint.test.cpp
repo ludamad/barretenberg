@@ -5,8 +5,8 @@
 #include "barretenberg/numeric/random/engine.hpp"
 
 using namespace barretenberg;
-using namespace proof_system::plonk;
-using namespace proof_system;
+using namespace plonk;
+using namespace bonk;
 
 namespace {
 auto& engine = numeric::random::get_debug_engine();
@@ -122,7 +122,7 @@ template <typename Composer> class stdlib_uint : public testing::Test {
                 }
             };
 
-            EXPECT_EQ(uint256_t(expected), a.get_value());
+            EXPECT_EQ(expected, a.get_value());
             auto prover = composer.create_prover();
             auto verifier = composer.create_verifier();
             plonk::proof proof = prover.construct_proof();
@@ -2107,10 +2107,10 @@ TYPED_TEST(stdlib_uint, test_at)
 // There was one plookup-specific test in the ./plookup/uint_plookup.test.cpp
 TEST(stdlib_uint32, test_accumulators_plookup_uint32)
 {
-    using uint32_ct = proof_system::plonk::stdlib::uint32<plonk::UltraComposer>;
-    using witness_ct = proof_system::plonk::stdlib::witness_t<plonk::UltraComposer>;
+    using uint32_ct = plonk::stdlib::uint32<plonk::UltraComposer>;
+    using witness_ct = plonk::stdlib::witness_t<plonk::UltraComposer>;
 
-    plonk::UltraComposer composer = proof_system::plonk::UltraComposer();
+    plonk::UltraComposer composer = plonk::UltraComposer();
 
     uint32_t a_val = engine.get_random_uint32();
     uint32_t b_val = engine.get_random_uint32();

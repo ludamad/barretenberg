@@ -1,11 +1,10 @@
 #pragma once
 #include "composer_base.hpp"
-#include "barretenberg/proof_system/types/merkle_hash_type.hpp"
-#include "barretenberg/proof_system/types/pedersen_commitment_type.hpp"
 #include "barretenberg/transcript/manifest.hpp"
 #include "barretenberg/srs/reference_string/file_reference_string.hpp"
 
-namespace proof_system::plonk {
+using namespace bonk;
+namespace plonk {
 enum StandardSelectors { QM, QC, Q1, Q2, Q3, NUM };
 
 inline std::vector<ComposerBase::SelectorProperties> standard_selector_properties()
@@ -19,8 +18,7 @@ inline std::vector<ComposerBase::SelectorProperties> standard_selector_propertie
 class StandardComposer : public ComposerBase {
   public:
     static constexpr ComposerType type = ComposerType::STANDARD;
-    static constexpr merkle::HashType merkle_hash_type = merkle::HashType::FIXED_BASE_PEDERSEN;
-    static constexpr pedersen::CommitmentType commitment_type = pedersen::CommitmentType::FIXED_BASE_PEDERSEN;
+    static constexpr MerkleHashType merkle_hash_type = MerkleHashType::FIXED_BASE_PEDERSEN;
     static constexpr size_t UINT_LOG2_BASE = 2;
 
     StandardComposer(const size_t size_hint = 0)
@@ -81,8 +79,6 @@ class StandardComposer : public ComposerBase {
     StandardComposer& operator=(StandardComposer&& other) = default;
     ~StandardComposer() {}
 
-    virtual size_t get_total_circuit_size() const override { return num_gates; };
-
     void assert_equal_constant(uint32_t const a_idx,
                                barretenberg::fr const& b,
                                std::string const& msg = "assert equal constant");
@@ -101,6 +97,11 @@ class StandardComposer : public ComposerBase {
     void create_big_add_gate_with_bit_extraction(const add_quad& in);
     void create_big_mul_gate(const mul_quad& in);
     void create_balanced_add_gate(const add_quad& in);
+    void create_fixed_group_add_gate(const fixed_group_add_quad& in);
+    void create_fixed_group_add_gate_with_init(const fixed_group_add_quad& in, const fixed_group_init_quad& init);
+    void create_fixed_group_add_gate_final(const add_quad& in);
+
+    fixed_group_add_quad previous_add_quad;
 
     void fix_witness(const uint32_t witness_index, const barretenberg::fr& witness_value);
 
@@ -232,4 +233,4 @@ class StandardComposer : public ComposerBase {
 
     bool check_circuit();
 };
-} // namespace proof_system::plonk
+} // namespace plonk

@@ -1,13 +1,13 @@
 #pragma once
-#include "barretenberg/plonk/proof_system/proving_key/proving_key.hpp"
+#include "../../../proof_system/proving_key/proving_key.hpp"
 #include "../types/proof.hpp"
 #include "../types/program_settings.hpp"
 #include "../widgets/random_widgets/random_widget.hpp"
 #include "../../../proof_system/work_queue/work_queue.hpp"
 #include "../widgets/transition_widgets/transition_widget.hpp"
 #include "../commitment_scheme/commitment_scheme.hpp"
-
-namespace proof_system::plonk {
+using namespace plonk;
+namespace plonk {
 
 template <typename settings> class ProverBase {
 
@@ -109,6 +109,5 @@ typedef ProverBase<ultra_settings> UltraProver; // TODO(Mike): maybe just return
                                                 // need separate cases for ultra vs ultra_to_standard...???
                                                 // TODO(Cody): Make this into an issue?
 typedef ProverBase<ultra_to_standard_settings> UltraToStandardProver;
-typedef ProverBase<ultra_with_keccak_settings> UltraWithKeccakProver;
 
-} // namespace proof_system::plonk
+} // namespace plonk

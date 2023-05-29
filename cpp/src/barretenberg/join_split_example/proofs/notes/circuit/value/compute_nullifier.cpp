@@ -1,6 +1,6 @@
 #include "compute_nullifier.hpp"
 #include "../../constants.hpp"
-#include "barretenberg/join_split_example/types.hpp"
+#include "barretenberg/stdlib/types/types.hpp"
 
 namespace join_split_example {
 namespace proofs {
@@ -8,7 +8,7 @@ namespace notes {
 namespace circuit {
 
 using namespace barretenberg;
-using namespace proof_system::plonk::stdlib;
+using namespace plonk::stdlib::types;
 
 field_ct compute_nullifier(field_ct const& note_commitment,
                            field_ct const& account_private_key,
@@ -30,7 +30,7 @@ field_ct compute_nullifier(field_ct const& note_commitment,
 
     // We compress the hash_inputs with Pedersen, because that's cheaper (constraint-wise) than compressing
     // the data directly with Blake2s in the next step.
-    const auto compressed_inputs = pedersen_commitment::compress(hash_inputs, GeneratorIndex::JOIN_SPLIT_NULLIFIER);
+    const auto compressed_inputs = pedersen::compress(hash_inputs, GeneratorIndex::JOIN_SPLIT_NULLIFIER);
 
     // Blake2s hash the compressed result. Without this it's possible to leak info from the pedersen compression.
     /** E.g. we can extract a representation of the hashed_pk:
@@ -42,7 +42,7 @@ field_ct compute_nullifier(field_ct const& note_commitment,
      * eth address.
      */
     auto blake_input = byte_array_ct(compressed_inputs);
-    auto blake_result = proof_system::plonk::stdlib::blake2s(blake_input);
+    auto blake_result = plonk::stdlib::blake2s(blake_input);
     return field_ct(blake_result);
 }
 

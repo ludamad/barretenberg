@@ -2,7 +2,7 @@
 
 #include "barretenberg/polynomials/polynomial.hpp"
 
-namespace proof_system::honk::pcs {
+namespace honk::pcs {
 /**
  * @brief Opening pair (r,v) for some witness polynomial p(X) such that p(r) = v
  *
@@ -12,7 +12,7 @@ template <typename Params> class OpeningPair {
     using Fr = typename Params::Fr;
 
   public:
-    Fr challenge;  // r
+    Fr query;      // r
     Fr evaluation; // v = p(r)
 
     bool operator==(const OpeningPair& other) const = default;
@@ -27,14 +27,14 @@ template <typename Params> class OpeningPair {
  */
 template <typename Params> class OpeningClaim {
     using CK = typename Params::CK;
-    using CommitmentAffine = typename Params::C;
+    using Commitment = typename Params::Commitment;
     using Fr = typename Params::Fr;
 
   public:
-    // (challenge r, evaluation v = p(r))
+    // (query r, evaluation v = p(r))
     OpeningPair<Params> opening_pair;
     // commitment to univariate polynomial p(X)
-    CommitmentAffine commitment;
+    Commitment commitment;
 
     /**
      * @brief inefficiently check that the claim is correct by recomputing the commitment
@@ -46,13 +46,17 @@ template <typename Params> class OpeningClaim {
      */
     bool verify(CK* ck, const barretenberg::Polynomial<Fr>& polynomial) const
     {
-        Fr real_eval = polynomial.evaluate(opening_pair.challenge);
+        Fr real_eval = polynomial.evaluate(opening_pair.query);
         if (real_eval != opening_pair.evaluation) {
             return false;
         }
         // Note: real_commitment is a raw type, while commitment may be a linear combination.
         auto real_commitment = ck->commit(polynomial);
-        return (real_commitment == commitment);
+        if (real_commitment != commitment) {
+            // if (commitment != real_commitment) {
+            return false;
+        }
+        return true;
     };
 
     bool operator==(const OpeningClaim& other) const = default;
@@ -77,17 +81,21 @@ template <typename Params> class OpeningClaim {
  *
  * @tparam CommitmentKey
  */
-template <typename Params> class MLEOpeningClaim {
-    using CommitmentAffine = typename Params::C;
+template <typename Params> struct MLEOpeningClaim {
+    using Commitment = typename Params::Commitment;
     using Fr = typename Params::Fr;
 
-  public:
+    MLEOpeningClaim(auto commitment, auto evaluation)
+        : commitment(commitment)
+        , evaluation(evaluation)
+    {}
+
     // commitment to a univariate polynomial
     // whose coefficients are the multi-linear evaluations
     // of C = [f]
-    CommitmentAffine commitment;
+    Commitment commitment;
     // v  = f(u) = ∑ᵢ aᵢ⋅Lᵢ(u)
     // v↺ = g(u) = a₁⋅L₀(u) + … + aₙ₋₁⋅Lₙ₋₂(u)
     Fr evaluation;
 };
-} // namespace proof_system::honk::pcs
+} // namespace honk::pcs

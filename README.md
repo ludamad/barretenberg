@@ -11,31 +11,16 @@
 - libomp (if multithreading is required. Multithreading can be disabled using the compiler flag `-DMULTITHREADING 0`)
 - wasm-opt (part of the [Binaryen](https://github.com/WebAssembly/binaryen) toolkit)
 
-To install on Ubuntu, run:
-```
-sudo apt-get install cmake clang clang-format ninja-build binaryen
-```
-
 ### Installing openMP (Linux)
 
-Install from source:
-
 ```
-git clone -b release/10.x --depth 1 https://github.com/llvm/llvm-project.git \
+RUN git clone -b release/10.x --depth 1 https://github.com/llvm/llvm-project.git \
   && cd llvm-project && mkdir build-openmp && cd build-openmp \
   && cmake ../openmp -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DLIBOMP_ENABLE_SHARED=OFF \
   && cmake --build . --parallel \
   && cmake --build . --parallel --target install \
   && cd ../.. && rm -rf llvm-project
 ```
-
-Or install from a package manager, on Ubuntu:
-
-```
-sudo apt-get install libomp-dev
-```
-
-> Note: on a fresh Ubuntu Kinetic installation, installing OpenMP from source yields a `Could NOT find OpenMP_C (missing: OpenMP_omp_LIBRARY) (found version "5.0")` error when trying to build Barretenberg. Installing from apt worked fine.
 
 ### Getting started
 
@@ -147,12 +132,6 @@ cmake --build --preset wasm --target ecc_tests
 wasmtime --dir=.. ./bin/ecc_tests
 ```
 
-To add gtest filter parameters in a wasm context:
-
-```
-wasmtime --dir=.. ./bin/ecc_tests run --gtest_filter=filtertext
-```
-
 ### Fuzzing build
 
 For detailed instructions look in cpp/docs/Fuzzing.md
@@ -181,13 +160,11 @@ cmake --build --preset coverage
 ```
 
 Then run tests (on the mainframe always use taskset and nice to limit your influence on the server. Profiling instrumentation is very heavy):
-
 ```
 taskset 0xffffff nice -n10 make test
 ```
 
 And generate report:
-
 ```
 make create_full_coverage_report
 ```
@@ -197,11 +174,4 @@ The report will land in the build directory in the all_test_coverage_report dire
 Alternatively you can build separate test binaries, e.g. honk_tests or numeric_tests and run **make test** just for them or even just for a single test. Then the report will just show coverage for those binaries.
 
 ### VS Code configuration
-
 A default configuration for VS Code is provided by the file [`barretenberg.code-workspace`](barretenberg.code-workspace). These settings can be overridden by placing configuration files in `.vscode/`.
-
-### Integration tests with Aztec Circuits
-
-CI will automatically run integration tests against Aztec's circuits which live [here](https://github.com/AztecProtocol/aztec-packages/tree/master/circuits). To change which Aztec branch or commit for CI to test against, modify [`.aztec-packages-commit`](./cpp/.aztec-packages-commit).
-
-When working on a PR, you may want to point this file to a adifferent Aztec branch or commit, but then it should probably be pointed back to master before merging.

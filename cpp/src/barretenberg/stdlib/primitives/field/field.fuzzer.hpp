@@ -4,8 +4,6 @@
 #include "barretenberg/stdlib/primitives/bool/bool.hpp"
 #include "barretenberg/ecc/curves/grumpkin/grumpkin.hpp"
 #include "barretenberg/ecc/curves/bn254/fr.hpp"
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wc99-designator"
 
 // This is a global variable, so that the execution handling class could alter it and signal to the input tester
 // that the input should fail
@@ -119,10 +117,10 @@ FastRandom VarianceRNG(0);
  */
 template <typename Composer> class FieldBase {
   private:
-    typedef proof_system::plonk::stdlib::bool_t<Composer> bool_t;
-    typedef proof_system::plonk::stdlib::field_t<Composer> field_t;
-    typedef proof_system::plonk::stdlib::witness_t<Composer> witness_t;
-    typedef proof_system::plonk::stdlib::public_witness_t<Composer> public_witness_t;
+    typedef plonk::stdlib::bool_t<Composer> bool_t;
+    typedef plonk::stdlib::field_t<Composer> field_t;
+    typedef plonk::stdlib::witness_t<Composer> witness_t;
+    typedef plonk::stdlib::public_witness_t<Composer> public_witness_t;
 
   public:
     /**
@@ -236,7 +234,9 @@ template <typename Composer> class FieldBase {
          * @param rng PRNG used
          * @return A random instruction
          */
-        template <typename T> inline static Instruction generateRandom(T& rng) requires SimpleRng<T>
+        template <typename T>
+        inline static Instruction generateRandom(T& rng)
+            requires SimpleRng<T>
         {
             // Choose which instruction we are going to generate
             OPCODE instruction_opcode = static_cast<OPCODE>(rng.next() % (OPCODE::_LAST));
@@ -335,7 +335,8 @@ template <typename Composer> class FieldBase {
          * @return Mutated element
          */
         template <typename T>
-        inline static fr mutateFieldElement(fr e, T& rng, HavocSettings& havoc_config) requires SimpleRng<T>
+        inline static fr mutateFieldElement(fr e, T& rng, HavocSettings& havoc_config)
+            requires SimpleRng<T>
         {
             // With a certain probability, we apply changes to the Montgomery form, rather than the plain form. This
             // has merit, since the computation is performed in montgomery form and comparisons are often performed
@@ -431,9 +432,8 @@ template <typename Composer> class FieldBase {
          * @return Mutated instruction
          */
         template <typename T>
-        inline static Instruction mutateInstruction(Instruction instruction,
-                                                    T& rng,
-                                                    HavocSettings& havoc_config) requires SimpleRng<T>
+        inline static Instruction mutateInstruction(Instruction instruction, T& rng, HavocSettings& havoc_config)
+            requires SimpleRng<T>
         {
 #define PUT_RANDOM_BYTE_IF_LUCKY(variable)                                                                             \
     if (rng.next() & 1) {                                                                                              \
@@ -1027,7 +1027,7 @@ template <typename Composer> class FieldBase {
                  *
                  * TEST(stdlib_field, test_construct_via_bool_t)
                  * {
-                 *     plonk::StandardComposer composer = proof_system::plonk::StandardComposer();
+                 *     plonk::StandardComposer composer = plonk::StandardComposer();
                  *     field_t a(witness_t(&composer, fr(uint256_t{0xf396b678452ebf15, 0x82ae10893982638b,
                  * 0xdf185a29c65fbf80, 0x1d18b2de99e48308}))); field_t b = a - a; field_t c(static_cast<bool_t>(b));
                  *     std::cout << c.get_value() << std::endl;
@@ -2019,5 +2019,3 @@ extern "C" size_t LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
     RunWithComposers<FieldBase, FuzzerComposerTypes>(Data, Size, VarianceRNG);
     return 0;
 }
-
-#pragma clang diagnostic pop

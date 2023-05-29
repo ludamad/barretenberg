@@ -15,7 +15,7 @@
 #include "barretenberg/ecc/curves/bn254/pairing.hpp"
 
 using namespace barretenberg;
-using namespace proof_system::plonk;
+using namespace plonk;
 
 TEST(commitment_scheme, kate_open)
 {
@@ -36,12 +36,12 @@ TEST(commitment_scheme, kate_open)
     plonk::KateCommitmentScheme<turbo_settings> newKate;
 
     // std::shared_ptr<ReferenceStringFactory> crs_factory = (new FileReferenceStringFactory("../srs_db/ignition"));
-    auto file_crs = std::make_shared<FileReferenceStringFactory>("../srs_db/ignition");
+    auto file_crs = std::make_shared<bonk::FileReferenceStringFactory>("../srs_db/ignition");
     auto crs = file_crs->get_prover_crs(n);
-    auto circuit_proving_key = std::make_shared<proving_key>(n, 0, crs, ComposerType::STANDARD);
+    auto circuit_proving_key = std::make_shared<proving_key>(n, 0, crs, plonk::STANDARD);
     work_queue queue(circuit_proving_key.get(), &inp_tx);
 
-    newKate.commit(&coeffs[0], "F_COMM", n, queue);
+    newKate.commit(&coeffs[0], "F_COMM", 0, queue);
     queue.process_queue();
 
     fr y = fr::random_element();
@@ -49,7 +49,7 @@ TEST(commitment_scheme, kate_open)
     fr f = polynomial_arithmetic::evaluate(&coeffs[0], z, n);
 
     newKate.compute_opening_polynomial(&coeffs[0], &W[0], z, n);
-    newKate.commit(&W[0], "W_COMM", n, queue);
+    newKate.commit(&W[0], "W_COMM", fr(0), queue);
     queue.process_queue();
 
     // check if W(y)(y - z) = F(y) - F(z)
@@ -93,9 +93,9 @@ TEST(commitment_scheme, kate_batch_open)
     transcript::StandardTranscript inp_tx = transcript::StandardTranscript(transcript::Manifest());
     plonk::KateCommitmentScheme<turbo_settings> newKate;
 
-    auto file_crs = std::make_shared<FileReferenceStringFactory>("../srs_db/ignition");
+    auto file_crs = std::make_shared<bonk::FileReferenceStringFactory>("../srs_db/ignition");
     auto crs = file_crs->get_prover_crs(n);
-    auto circuit_proving_key = std::make_shared<proving_key>(n, 0, crs, ComposerType::STANDARD);
+    auto circuit_proving_key = std::make_shared<proving_key>(n, 0, crs, plonk::STANDARD);
     work_queue queue(circuit_proving_key.get(), &inp_tx);
 
     // commit to individual polynomials
@@ -103,7 +103,7 @@ TEST(commitment_scheme, kate_batch_open)
         for (size_t j = 0; j < m; ++j) {
             newKate.commit(&coeffs[k * m * n + j * n],
                            "F_{" + std::to_string(k + 1) + ", " + std::to_string(j + 1) + "}",
-                           n,
+                           0,
                            queue);
         }
     }
@@ -116,7 +116,7 @@ TEST(commitment_scheme, kate_batch_open)
     for (size_t k = 0; k < t; ++k) {
         challenges[k] = fr::random_element();
         tags[k] = "W_" + std::to_string(k + 1);
-        item_constants[k] = n;
+        item_constants[k] = fr(0);
     }
 
     // compute opening polynomials W_1, W_2, ..., W_t

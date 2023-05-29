@@ -4,49 +4,11 @@
 #include "barretenberg/stdlib/primitives/byte_array/byte_array.hpp"
 #include "barretenberg/stdlib/primitives/field/field.hpp"
 
-namespace proof_system::plonk {
+namespace plonk {
 namespace stdlib {
 namespace merkle_tree {
 
 template <typename ComposerContext> using bit_vector = std::vector<bool_t<ComposerContext>>;
-/**
- * Computes the new merkle root if the subtree is correctly inserted at a specified index in a Merkle tree.
- *
- * @param hashes: The hash path from any leaf in the subtree to the root, it doesn't matter if this hash path is
- * computed before or after updating the tree,
- * @param value: The value of the subtree root,
- * @param index: The index of any leaf in the subtree,
- * @param at_height: The height of the subtree,
- * @param is_updating_tree: set to true if we're updating the tree.
- * @tparam Composer: type of composer.
- *
- * @see Check full documentation: https://hackmd.io/2zyJc6QhRuugyH8D78Tbqg?view
- */
-template <typename Composer>
-field_t<Composer> compute_subtree_root(hash_path<Composer> const& hashes,
-                                       field_t<Composer> const& value,
-                                       bit_vector<Composer> const& index,
-                                       size_t at_height,
-                                       bool const is_updating_tree = false)
-{
-    auto current = value;
-    for (size_t i = at_height; i < hashes.size(); ++i) {
-        // get the parity bit at this level of the tree (get_bit returns bool so we know this is 0 or 1)
-        bool_t<Composer> path_bit = index[i];
-
-        // reconstruct the two inputs we need to hash
-        // if `path_bit = false`, we know `current` is the left leaf and `hashes[i].second` is the right leaf
-        // if `path_bit = true`, we know `current` is the right leaf and `hashes[i].first` is the left leaf
-        // We don't need to explicitly check that hashes[i].first = current iff !path bit , or that hashes[i].second =
-        // current iff path_bit If either of these does not hold, then the final computed merkle root will not match
-        field_t<Composer> left = field_t<Composer>::conditional_assign(path_bit, hashes[i].first, current);
-        field_t<Composer> right = field_t<Composer>::conditional_assign(path_bit, current, hashes[i].second);
-        current = pedersen_hash<Composer>::hash_multiple({ left, right }, 0, is_updating_tree);
-    }
-
-    return current;
-}
-
 /**
  * Checks if the subtree is correctly inserted at a specified index in a Merkle tree.
  *
@@ -69,7 +31,22 @@ bool_t<Composer> check_subtree_membership(field_t<Composer> const& root,
                                           size_t at_height,
                                           bool const is_updating_tree = false)
 {
-    return (compute_subtree_root(hashes, value, index, at_height, is_updating_tree) == root);
+    auto current = value;
+    for (size_t i = at_height; i < hashes.size(); ++i) {
+        // get the parity bit at this level of the tree (get_bit returns bool so we know this is 0 or 1)
+        bool_t<Composer> path_bit = index[i];
+
+        // reconstruct the two inputs we need to hash
+        // if `path_bit = false`, we know `current` is the left leaf and `hashes[i].second` is the right leaf
+        // if `path_bit = true`, we know `current` is the right leaf and `hashes[i].first` is the left leaf
+        // We don't need to explicitly check that hashes[i].first = current iff !path bit , or that hashes[i].second =
+        // current iff path_bit If either of these does not hold, then the final computed merkle root will not match
+        field_t<Composer> left = field_t<Composer>::conditional_assign(path_bit, hashes[i].first, current);
+        field_t<Composer> right = field_t<Composer>::conditional_assign(path_bit, current, hashes[i].second);
+        current = pedersen<Composer>::compress_unsafe(left, right, 0, is_updating_tree);
+    }
+
+    return (current == root);
 }
 
 /**
@@ -173,35 +150,6 @@ void update_membership(field_t<Composer> const& new_root,
 }
 
 /**
- * Asserts if the state transitions on updating multiple existing leaves with new values.
- *
- * @param old_root: The root of the merkle tree before it was updated,
- * @param new_roots: New roots after each existing leaf was updated,
- * @param new_values: The new values that are inserted in the existing leaves,
- * @param old_values: The values of the existing leaves that were updated,
- * @param old_paths: The hash path from the given index right before a given existing leaf is updated,
- * @param old_indicies: Indices of the existing leaves that need to be updated,
- * @tparam Composer: type of composer.
- */
-template <typename Composer>
-field_t<Composer> update_memberships(field_t<Composer> old_root,
-                                     std::vector<field_t<Composer>> const& new_roots,
-                                     std::vector<field_t<Composer>> const& new_values,
-                                     std::vector<field_t<Composer>> const& old_values,
-                                     std::vector<hash_path<Composer>> const& old_paths,
-                                     std::vector<bit_vector<Composer>> const& old_indicies)
-{
-    for (size_t i = 0; i < old_indicies.size(); i++) {
-        update_membership(
-            new_roots[i], new_values[i], old_root, old_paths[i], old_values[i], old_indicies[i], "update_memberships");
-
-        old_root = new_roots[i];
-    }
-
-    return old_root;
-}
-
-/**
  * Asserts if old and new state of the tree is correct after a subtree-update.
  *
  * @param new_root: The root of the updated merkle tree,
@@ -251,7 +199,7 @@ template <typename Composer> field_t<Composer> compute_tree_root(std::vector<fie
     while (layer.size() > 1) {
         std::vector<field_t<Composer>> next_layer(layer.size() / 2);
         for (size_t i = 0; i < next_layer.size(); ++i) {
-            next_layer[i] = pedersen_hash<Composer>::hash_multiple({ layer[i * 2], layer[i * 2 + 1] });
+            next_layer[i] = pedersen<Composer>::compress(layer[i * 2], layer[i * 2 + 1]);
         }
         layer = std::move(next_layer);
     }
@@ -314,4 +262,4 @@ void batch_update_membership(field_t<Composer> const& new_root,
 
 } // namespace merkle_tree
 } // namespace stdlib
-} // namespace proof_system::plonk
+} // namespace plonk

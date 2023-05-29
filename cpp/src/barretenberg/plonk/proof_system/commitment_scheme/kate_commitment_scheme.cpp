@@ -2,7 +2,7 @@
 #include "kate_commitment_scheme.hpp"
 #include "../../../polynomials/polynomial_arithmetic.hpp"
 
-namespace proof_system::plonk {
+namespace plonk {
 
 // Constructors for KateCommitmentScheme
 template <typename settings>
@@ -133,7 +133,7 @@ void KateCommitmentScheme<settings>::generic_batch_open(const fr* src,
 template <typename settings>
 void KateCommitmentScheme<settings>::batch_open(const transcript::StandardTranscript& transcript,
                                                 work_queue& queue,
-                                                std::shared_ptr<plonk::proving_key> input_key)
+                                                std::shared_ptr<bonk::proving_key> input_key)
 {
     /*
     Compute batch opening polynomials according to the Kate commitment scheme.
@@ -224,18 +224,16 @@ void KateCommitmentScheme<settings>::batch_open(const transcript::StandardTransc
 
     // Commit to the opening and shifted opening polynomials
     KateCommitmentScheme::commit(
-        input_key->polynomial_store.get("opening_poly").get_coefficients(), "PI_Z", input_key->circuit_size, queue);
-    KateCommitmentScheme::commit(input_key->polynomial_store.get("shifted_opening_poly").get_coefficients(),
-                                 "PI_Z_OMEGA",
-                                 input_key->circuit_size,
-                                 queue);
+        input_key->polynomial_store.get("opening_poly").get_coefficients(), "PI_Z", fr(0), queue);
+    KateCommitmentScheme::commit(
+        input_key->polynomial_store.get("shifted_opening_poly").get_coefficients(), "PI_Z_OMEGA", fr(0), queue);
 }
 
 template <typename settings>
 void KateCommitmentScheme<settings>::batch_verify(const transcript::StandardTranscript& transcript,
                                                   std::map<std::string, g1::affine_element>& kate_g1_elements,
                                                   std::map<std::string, fr>& kate_fr_elements,
-                                                  std::shared_ptr<plonk::verification_key> input_key)
+                                                  std::shared_ptr<bonk::verification_key> input_key)
 {
     // Compute batch evaluation commitment [F]_1
     // In this method, we accumulate scalars and corresponding group elements for the multi-scalar
@@ -347,8 +345,9 @@ void KateCommitmentScheme<settings>::batch_verify(const transcript::StandardTran
 }
 
 template <typename settings>
-void KateCommitmentScheme<settings>::add_opening_evaluations_to_transcript(
-    transcript::StandardTranscript& transcript, std::shared_ptr<plonk::proving_key> input_key, bool in_lagrange_form)
+void KateCommitmentScheme<settings>::add_opening_evaluations_to_transcript(transcript::StandardTranscript& transcript,
+                                                                           std::shared_ptr<bonk::proving_key> input_key,
+                                                                           bool in_lagrange_form)
 {
     // In this function, we compute the evaluations of all polynomials in the polynomial manifest at the
     // evaluation challenge "zeta", as well as the needed evaluations at shifts.
@@ -392,5 +391,4 @@ template class KateCommitmentScheme<standard_settings>;
 template class KateCommitmentScheme<turbo_settings>;
 template class KateCommitmentScheme<ultra_settings>;
 template class KateCommitmentScheme<ultra_to_standard_settings>;
-template class KateCommitmentScheme<ultra_with_keccak_settings>;
-} // namespace proof_system::plonk
+} // namespace plonk

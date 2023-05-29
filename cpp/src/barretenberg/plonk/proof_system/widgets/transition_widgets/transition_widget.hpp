@@ -7,11 +7,10 @@
 
 #include "barretenberg/polynomials/iterate_over_domain.hpp"
 #include "../../types/prover_settings.hpp"
-#include "barretenberg/plonk/proof_system/proving_key/proving_key.hpp"
-#include "barretenberg/proof_system/work_queue/work_queue.hpp"
-
-using namespace proof_system;
-namespace proof_system::plonk {
+#include "../../../../proof_system/proving_key/proving_key.hpp"
+#include "../../../../proof_system/work_queue/work_queue.hpp"
+using namespace bonk;
+namespace plonk {
 
 namespace widget {
 enum ChallengeIndex {
@@ -387,4 +386,4 @@ class GenericVerifierWidget {
     }
 };
 } // namespace widget
-} // namespace proof_system::plonk
+} // namespace plonk

@@ -7,7 +7,7 @@
  * We use a special case algorithm to split bn254 scalar multipliers into endomorphism scalars
  *
  **/
-namespace proof_system::plonk {
+namespace plonk {
 namespace stdlib {
 
 /**
@@ -117,45 +117,34 @@ element<C, Fq, Fr, G> element<C, Fq, Fr, G>::bn254_endo_batch_mul_with_generator
             return to_add;
         };
 
-        // Perform multiple rounds of the montgomery ladder algoritm per "iteration" of our main loop.
-        // This is in order to reduce the number of field reductions required when calling `multiple_montgomery_ladder`
-        constexpr size_t num_rounds_per_iteration = 4;
+        for (size_t i = 1; i < num_rounds / 2; ++i) {
 
-        // we require that we perform max of one generator per iteration
-        static_assert(num_rounds_per_iteration < 8);
+            auto add_1 = get_point_to_add(i * 2 - 1);
+            auto add_2 = get_point_to_add(i * 2);
 
-        size_t num_iterations = num_rounds / num_rounds_per_iteration;
-        num_iterations += ((num_iterations * num_rounds_per_iteration) == num_rounds) ? 0 : 1;
-        const size_t num_rounds_per_final_iteration =
-            (num_rounds - 1) - ((num_iterations - 1) * num_rounds_per_iteration);
-
-        size_t generator_idx = 0;
-        for (size_t i = 0; i < num_iterations; ++i) {
-
-            const size_t inner_num_rounds =
-                (i != num_iterations - 1) ? num_rounds_per_iteration : num_rounds_per_final_iteration;
-            std::vector<element::chain_add_accumulator> to_add;
-
-            for (size_t j = 0; j < inner_num_rounds; ++j) {
-                to_add.emplace_back(get_point_to_add(i * num_rounds_per_iteration + j + 1));
+            // TODO update this to work if num_bits is odd
+            if ((i * 2) % 8 == 0) {
+                add_1 = element::chain_add(generator_table[generator_wnaf[(i * 2 - 8) / 8]], add_1);
+                add_1 = element::chain_add(generator_endo_table[generator_endo_wnaf[(i * 2 - 8) / 8]], add_1);
             }
+            if (!add_1.is_element) {
+                accumulator = accumulator.double_montgomery_ladder(add_1, add_2);
+            } else {
+                accumulator = accumulator.double_montgomery_ladder(element(add_1.x3_prev, add_1.y3_prev),
+                                                                   element(add_2.x3_prev, add_2.y3_prev));
+            }
+        }
 
-            bool add_generator_this_round = false;
-            size_t add_idx = 0;
-            for (size_t j = 0; j < inner_num_rounds; ++j) {
-                add_generator_this_round = ((i * num_rounds_per_iteration + j) % 8) == 6;
-                if (add_generator_this_round) {
-                    add_idx = j;
-                    break;
-                }
+        if ((num_rounds & 0x01ULL) == 0x00ULL) {
+            auto add_1 = get_point_to_add(num_rounds - 1);
+            add_1 = element::chain_add(generator_table[generator_wnaf[generator_wnaf.size() - 2]], add_1);
+            add_1 = element::chain_add(generator_endo_table[generator_endo_wnaf[generator_wnaf.size() - 2]], add_1);
+            if (add_1.is_element) {
+                element temp(add_1.x3_prev, add_1.y3_prev);
+                accumulator = accumulator.montgomery_ladder(temp);
+            } else {
+                accumulator = accumulator.montgomery_ladder(add_1);
             }
-            if (add_generator_this_round) {
-                to_add[add_idx] = element::chain_add(generator_table[generator_wnaf[generator_idx]], to_add[add_idx]);
-                to_add[add_idx] =
-                    element::chain_add(generator_endo_table[generator_endo_wnaf[generator_idx]], to_add[add_idx]);
-                generator_idx++;
-            }
-            accumulator = accumulator.multiple_montgomery_ladder(to_add);
         }
 
         for (size_t i = 0; i < small_points.size(); ++i) {
@@ -344,12 +333,12 @@ element<C, Fq, Fr, G> element<C, Fq, Fr, G>::bn254_endo_batch_mul(const std::vec
      * 1. Extract NAF value for bit `2*i - 1` for each scalar multiplier and store in `nafs` vector.
      * 2. Use `nafs` vector to derive the point that we need (`add_1`) to add into our accumulator.
      * 3. Repeat the above 2 steps but for bit `2 * i` (`add_2`)
-     * 4. Compute `accumulator = 4 * accumulator + 2 * add_1 + add_2` using `multiple_montgomery_ladder` method
+     * 4. Compute `accumulator = 4 * accumulator + 2 * add_1 + add_2` using `double_montgomery_ladder` method
      *
      * The purpose of the above is to minimize the number of required range checks (vs a simple double and add algo).
      *
-     * When computing repeated iterations of the montgomery ladder algorithm, we can neglect computing the y-coordinate
-     *of each ladder output. See `multiple_montgomery_ladder` for more details.
+     * When computing two iterations of the montgomery ladder algorithm, we can neglect computing the y-coordinate of
+     *the 1st ladder output. See `double_montgomery_ladder` for more details.
      **/
     for (size_t i = 1; i < num_rounds / 2; ++i) {
         // `nafs` tracks the naf value for each point for the current round
@@ -376,8 +365,14 @@ element<C, Fq, Fr, G> element<C, Fq, Fr, G>::bn254_endo_batch_mul(const std::vec
         }
         element::chain_add_accumulator add_2 = point_table.get_chain_add_accumulator(nafs);
 
-        // Perform the double montgomery ladder.
-        accumulator = accumulator.multiple_montgomery_ladder({ add_1, add_2 });
+        // Perform the double montgomery ladder. We need to convert our chain_add_accumulator types into regular
+        // elements if the accumuator does not contain a y-coordinate
+        if (!add_1.is_element) {
+            accumulator = accumulator.double_montgomery_ladder(add_1, add_2);
+        } else {
+            accumulator = accumulator.double_montgomery_ladder(element(add_1.x3_prev, add_1.y3_prev),
+                                                               element(add_2.x3_prev, add_2.y3_prev));
+        }
     }
 
     // we need to iterate 1 more time if the number of rounds is even
@@ -387,7 +382,12 @@ element<C, Fq, Fr, G> element<C, Fq, Fr, G>::bn254_endo_batch_mul(const std::vec
             nafs.emplace_back(naf_entries[j][num_rounds - 1]);
         }
         element::chain_add_accumulator add_1 = point_table.get_chain_add_accumulator(nafs);
-        accumulator = accumulator.multiple_montgomery_ladder({ add_1 });
+        if (add_1.is_element) {
+            element temp(add_1.x3_prev, add_1.y3_prev);
+            accumulator = accumulator.montgomery_ladder(temp);
+        } else {
+            accumulator = accumulator.montgomery_ladder(add_1);
+        }
     }
 
     /**
@@ -422,4 +422,4 @@ element<C, Fq, Fr, G> element<C, Fq, Fr, G>::bn254_endo_batch_mul(const std::vec
     return accumulator;
 }
 } // namespace stdlib
-} // namespace proof_system::plonk
+} // namespace plonk

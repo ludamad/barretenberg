@@ -1,7 +1,7 @@
 #pragma once
 #include "random_widget.hpp"
 
-namespace proof_system::plonk {
+namespace plonk {
 template <typename Field,
           typename Group,
           typename Transcript,
@@ -42,6 +42,6 @@ class ProverPermutationWidget : public ProverRandomWidget {
                                                    const transcript::StandardTranscript& transcript) override;
 };
 
-} // namespace proof_system::plonk
+} // namespace plonk
 
 #include "./permutation_widget_impl.hpp"

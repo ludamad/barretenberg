@@ -11,7 +11,7 @@ namespace barretenberg::pairing {
 struct miller_lines;
 } // namespace barretenberg::pairing
 
-namespace proof_system {
+namespace bonk {
 
 using namespace barretenberg;
 
@@ -29,4 +29,4 @@ class VerifierMemReferenceString : public VerifierReferenceString {
     pairing::miller_lines* precomputed_g2_lines;
 };
 
-} // namespace proof_system
+} // namespace bonk

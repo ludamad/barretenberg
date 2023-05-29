@@ -12,11 +12,10 @@
 #include "barretenberg/ecc/curves/bn254/pairing.hpp"
 #include "barretenberg/numeric/bitop/pow.hpp"
 
-#include <cstddef>
 #include <string_view>
 #include <memory>
 
-namespace proof_system::honk::pcs {
+namespace honk::pcs {
 
 namespace kzg {
 
@@ -67,7 +66,7 @@ class CommitmentKey {
 
   private:
     barretenberg::scalar_multiplication::pippenger_runtime_state pippenger_runtime_state;
-    proof_system::FileReferenceString srs;
+    bonk::FileReferenceString srs;
 };
 
 class VerificationKey {
@@ -109,7 +108,7 @@ class VerificationKey {
     }
 
   private:
-    proof_system::VerifierFileReferenceString verifier_srs;
+    bonk::VerifierFileReferenceString verifier_srs;
 };
 
 struct Params {
@@ -244,7 +243,7 @@ class CommitmentKey {
     };
 
     barretenberg::scalar_multiplication::pippenger_runtime_state pippenger_runtime_state;
-    proof_system::FileReferenceString srs;
+    bonk::FileReferenceString srs;
 };
 
 class VerificationKey {
@@ -269,7 +268,7 @@ class VerificationKey {
     {}
 
     barretenberg::scalar_multiplication::pippenger_runtime_state pippenger_runtime_state;
-    proof_system::FileReferenceString srs;
+    bonk::FileReferenceString srs;
 };
 
 struct Params {
@@ -285,4 +284,4 @@ struct Params {
 
 } // namespace ipa
 
-} // namespace proof_system::honk::pcs
+} // namespace honk::pcs

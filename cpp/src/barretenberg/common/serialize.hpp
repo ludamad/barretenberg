@@ -1,6 +1,5 @@
 /**
- * This is a non-msgpack flat buffer serialization library.
- * It is currently used alongside msgpack, with hope to eventually move to msgpack.
+ * This is the core serialization library.
  * It enables the reading and writing of big-endian formatted integers and various standard library types
  * to and from the following supported types:
  *  - uint8_t*
@@ -28,7 +27,6 @@
  *  - to_buffer
  */
 #pragma once
-#include <cassert>
 #include <array>
 #include "barretenberg/common/net.hpp"
 #include <type_traits>
@@ -36,12 +34,10 @@
 #include <map>
 #include <iostream>
 #include "barretenberg/common/log.hpp"
-#include <optional>
 
 #ifndef __i386__
 __extension__ using uint128_t = unsigned __int128;
 #endif
-
 namespace serialize {
 // Basic integer read / write, to / from raw buffers.
 // Pointers to buffers are advanced by length of type.
@@ -152,24 +148,6 @@ template <typename T> inline std::enable_if_t<std::is_integral_v<T>> write(std::
     write(ptr, value);
     os.write((char*)buf.data(), sizeof(T));
 }
-
-// DEBUG_CANARY_READ and DEBUG_CANARY_WRITE write strings during debug testing
-// so that we can detect serialization misalignment for more complicated types.
-// This is in an awkward location as it must see the above functions, and be seen by the below functions.
-#ifndef ENABLE_SERIALIZE_CANARY
-#define DEBUG_CANARY_WRITE(buf, x)
-#define DEBUG_CANARY_READ(it, x)
-#else
-#define DEBUG_CANARY_WRITE(buf, x) serialize::write(buf, (uint64_t) typeid(x).hash_code())
-#define DEBUG_CANARY_READ(it, x)                                                                                       \
-    {                                                                                                                  \
-        uint64_t hash_code;                                                                                            \
-        serialize::read(it, hash_code);                                                                                \
-        if (hash_code != (uint64_t) typeid(x).hash_code()) {                                                           \
-            throw std::runtime_error(std::string("Could not read magic string for ") + typeid(x).name());              \
-        }                                                                                                              \
-    }
-#endif
 } // namespace serialize
 
 namespace std {
@@ -177,20 +155,17 @@ namespace std {
 // Forwarding functions from std to serialize namespace for integers.
 template <typename B, typename T> inline std::enable_if_t<std::is_integral_v<T>> read(B& buf, T& value)
 {
-    DEBUG_CANARY_READ(buf, value);
     serialize::read(buf, value);
 }
 
 template <typename B, typename T> inline std::enable_if_t<std::is_integral_v<T>> write(B& buf, T value)
 {
-    DEBUG_CANARY_WRITE(buf, value);
     serialize::write(buf, value);
 }
 
 // Optimised specialisation for reading arrays of bytes from a raw buffer.
 template <size_t N> inline void read(uint8_t const*& it, std::array<uint8_t, N>& value)
 {
-    DEBUG_CANARY_READ(it, value);
     std::copy(it, it + N, value.data());
     it += N;
 }
@@ -198,7 +173,6 @@ template <size_t N> inline void read(uint8_t const*& it, std::array<uint8_t, N>&
 // Optimised specialisation for writing arrays of bytes to a raw buffer.
 template <size_t N> inline void write(uint8_t*& buf, std::array<uint8_t, N> const& value)
 {
-    DEBUG_CANARY_WRITE(buf, value);
     std::copy(value.begin(), value.end(), buf);
     buf += N;
 }
@@ -206,7 +180,6 @@ template <size_t N> inline void write(uint8_t*& buf, std::array<uint8_t, N> cons
 // Optimised specialisation for reading vectors of bytes from a raw buffer.
 inline void read(uint8_t const*& it, std::vector<uint8_t>& value)
 {
-    DEBUG_CANARY_READ(it, value);
     uint32_t size;
     read(it, size);
     value.resize(size);
@@ -217,7 +190,6 @@ inline void read(uint8_t const*& it, std::vector<uint8_t>& value)
 // Optimised specialisation for writing vectors of bytes to a raw buffer.
 inline void write(uint8_t*& buf, std::vector<uint8_t> const& value)
 {
-    DEBUG_CANARY_WRITE(buf, value);
     write(buf, static_cast<uint32_t>(value.size()));
     std::copy(value.begin(), value.end(), buf);
     buf += value.size();
@@ -226,7 +198,6 @@ inline void write(uint8_t*& buf, std::vector<uint8_t> const& value)
 // Optimised specialisation for reading vectors of bytes from an input stream.
 inline void read(std::istream& is, std::vector<uint8_t>& value)
 {
-    DEBUG_CANARY_READ(is, value);
     uint32_t size;
     read(is, size);
     value.resize(size);
@@ -236,7 +207,6 @@ inline void read(std::istream& is, std::vector<uint8_t>& value)
 // Optimised specialisation for writing vectors of bytes to an output stream.
 inline void write(std::ostream& os, std::vector<uint8_t> const& value)
 {
-    DEBUG_CANARY_WRITE(os, value);
     write(os, static_cast<uint32_t>(value.size()));
     os.write((char*)value.data(), (std::streamsize)value.size());
 }
@@ -244,7 +214,6 @@ inline void write(std::ostream& os, std::vector<uint8_t> const& value)
 // Optimised specialisation for writing arrays of bytes to a vector.
 template <size_t N> inline void write(std::vector<uint8_t>& buf, std::array<uint8_t, N> const& value)
 {
-    DEBUG_CANARY_WRITE(buf, value);
     buf.resize(buf.size() + N);
     auto ptr = &*buf.end() - N;
     write(ptr, value);
@@ -253,14 +222,12 @@ template <size_t N> inline void write(std::vector<uint8_t>& buf, std::array<uint
 // Optimised specialisation for writing arrays of bytes to an output stream.
 template <size_t N> inline void write(std::ostream& os, std::array<uint8_t, N> const& value)
 {
-    DEBUG_CANARY_WRITE(os, value);
     os.write((char*)value.data(), value.size());
 }
 
 // Generic read of array of types from supported buffer types.
 template <typename B, typename T, size_t N> inline void read(B& it, std::array<T, N>& value)
 {
-    DEBUG_CANARY_READ(it, value);
     for (size_t i = 0; i < N; ++i) {
         read(it, value[i]);
     }
@@ -269,7 +236,6 @@ template <typename B, typename T, size_t N> inline void read(B& it, std::array<T
 // Generic write of array of types to supported buffer types.
 template <typename B, typename T, size_t N> inline void write(B& buf, std::array<T, N> const& value)
 {
-    DEBUG_CANARY_WRITE(buf, value);
     for (size_t i = 0; i < N; ++i) {
         write(buf, value[i]);
     }
@@ -278,7 +244,6 @@ template <typename B, typename T, size_t N> inline void write(B& buf, std::array
 // Generic read of vector of types from supported buffer types.
 template <typename B, typename T> inline void read(B& it, std::vector<T>& value)
 {
-    DEBUG_CANARY_READ(it, value);
     uint32_t size;
     read(it, size);
     value.resize(size);
@@ -299,7 +264,6 @@ template <typename B, typename T> inline void write(B& buf, std::vector<T> const
 // Read string from supported buffer types.
 template <typename B> inline void read(B& it, std::string& value)
 {
-    DEBUG_CANARY_READ(it, value);
     std::vector<uint8_t> buf;
     read(it, buf);
     value = std::string(buf.begin(), buf.end());
@@ -314,7 +278,6 @@ template <typename B> inline void write(B& buf, std::string const& value)
 // Read std::pair.
 template <typename B, typename T, typename U> inline void read(B& it, std::pair<T, U>& value)
 {
-    DEBUG_CANARY_READ(it, value);
     read(it, value.first);
     read(it, value.second);
 }
@@ -322,7 +285,6 @@ template <typename B, typename T, typename U> inline void read(B& it, std::pair<
 // Write std::pair.
 template <typename B, typename T, typename U> inline void write(B& buf, std::pair<T, U> const& value)
 {
-    DEBUG_CANARY_WRITE(buf, value);
     write(buf, value.first);
     write(buf, value.second);
 }
@@ -330,7 +292,6 @@ template <typename B, typename T, typename U> inline void write(B& buf, std::pai
 // Read std::map
 template <typename B, typename T, typename U> inline void read(B& it, std::map<T, U>& value)
 {
-    DEBUG_CANARY_READ(it, value);
     value.clear();
     uint32_t size;
     read(it, size);
@@ -344,40 +305,10 @@ template <typename B, typename T, typename U> inline void read(B& it, std::map<T
 // Write std::map.
 template <typename B, typename T, typename U> inline void write(B& buf, std::map<T, U> const& value)
 {
-    DEBUG_CANARY_WRITE(buf, value);
     write(buf, static_cast<uint32_t>(value.size()));
     for (auto const& kv : value) {
         write(buf, kv);
     }
-}
-
-// Read std::optional<T>.
-template <typename B, typename T> inline void read(B& it, std::optional<T>& opt_value)
-{
-    DEBUG_CANARY_READ(it, opt_value);
-    bool is_nullopt;
-    read(it, is_nullopt);
-    if (is_nullopt) {
-        opt_value = std::nullopt;
-        return;
-    }
-    T value;
-    read(it, value);
-    opt_value = T(value);
-}
-
-// Write std::optional<T>.
-// Note: It takes up a different amount of space, depending on whether it's std::nullopt or populated with an actual
-// value.
-template <typename B, typename T> inline void write(B& buf, std::optional<T> const& opt_value)
-{
-    DEBUG_CANARY_WRITE(buf, opt_value);
-    if (opt_value) {
-        write(buf, false); // is not nullopt
-        write(buf, *opt_value);
-        return;
-    }
-    write(buf, true); // is nullopt
 }
 
 } // namespace std

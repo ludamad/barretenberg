@@ -3,14 +3,15 @@
 #include "../notes/circuit/value/witness_data.hpp"
 #include "../notes/circuit/claim/witness_data.hpp"
 #include "barretenberg/crypto/schnorr/schnorr.hpp"
-#include "barretenberg/join_split_example/types.hpp"
+#include "barretenberg/stdlib/types/types.hpp"
 
 namespace join_split_example {
 namespace proofs {
 namespace join_split {
 
-struct join_split_inputs {
+using namespace plonk::stdlib::types;
 
+struct join_split_inputs {
     field_ct proof_id;
     suint_ct public_value;
     field_ct public_owner;
@@ -24,12 +25,12 @@ struct join_split_inputs {
     notes::circuit::value::witness_data output_note2;
     notes::circuit::claim::partial_claim_note_witness_data partial_claim_note;
     point_ct signing_pub_key;
-    schnorr::signature_bits signature;
+    stdlib::schnorr::signature_bits<Composer> signature;
     field_ct merkle_root;
-    hash_path_ct input_path1;
-    hash_path_ct input_path2;
+    merkle_tree::hash_path input_path1;
+    merkle_tree::hash_path input_path2;
     suint_ct account_note_index;
-    hash_path_ct account_note_path;
+    merkle_tree::hash_path account_note_path;
     field_ct account_private_key;
     suint_ct alias_hash;
     bool_ct account_required;

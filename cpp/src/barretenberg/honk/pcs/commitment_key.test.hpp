@@ -14,11 +14,12 @@
 
 #include "../oracle/oracle.hpp"
 #include "../../transcript/transcript_wrappers.hpp"
+#include "../../proof_system/flavor/flavor.hpp"
 
 #include "claim.hpp"
 #include "commitment_key.hpp"
 
-namespace proof_system::honk::pcs {
+namespace honk::pcs {
 namespace {
 constexpr std::string_view kzg_srs_path = "../srs_db/ignition";
 }
@@ -65,7 +66,7 @@ template <typename Params> class CommitmentTest : public ::testing::Test {
     using VK = typename Params::VK;
 
     using Fr = typename Params::Fr;
-    using CommitmentAffine = typename Params::C;
+    using Commitment = typename Params::Commitment;
     using Polynomial = typename Params::Polynomial;
     using Transcript = transcript::StandardTranscript;
 
@@ -77,7 +78,7 @@ template <typename Params> class CommitmentTest : public ::testing::Test {
     std::shared_ptr<CK> ck() { return commitment_key; }
     std::shared_ptr<VK> vk() { return verification_key; }
 
-    CommitmentAffine commit(const Polynomial& polynomial) { return commitment_key->commit(polynomial); }
+    Commitment commit(const Polynomial& polynomial) { return commitment_key->commit(polynomial); }
 
     Polynomial random_polynomial(const size_t n)
     {
@@ -121,7 +122,7 @@ template <typename Params> class CommitmentTest : public ::testing::Test {
         auto& [x, y] = claim.opening_pair;
         Fr y_expected = witness.evaluate(x);
         EXPECT_EQ(y, y_expected) << "OpeningClaim: evaluations mismatch";
-        CommitmentAffine commitment_expected = commit(witness);
+        Commitment commitment_expected = commit(witness);
         EXPECT_EQ(commitment, commitment_expected) << "OpeningClaim: commitment mismatch";
     }
 
@@ -201,4 +202,4 @@ using IpaCommitmentSchemeParams = ::testing::Types<ipa::Params>;
 // using CommitmentSchemeParams =
 //     ::testing::Types<fake::Params<barretenberg::g1>, fake::Params<grumpkin::g1>, kzg::Params>;
 
-} // namespace proof_system::honk::pcs
+} // namespace honk::pcs

@@ -3,7 +3,7 @@
 #include "../composers/composers.hpp"
 #include "barretenberg/ecc/curves/grumpkin/grumpkin.hpp"
 
-namespace proof_system::plonk {
+namespace plonk {
 namespace stdlib {
 
 template <typename ComposerContext>
@@ -102,4 +102,4 @@ std::array<safe_uint_t<ComposerContext>, 3> safe_uint_t<ComposerContext>::slice(
 INSTANTIATE_STDLIB_TYPE(safe_uint_t);
 
 } // namespace stdlib
-} // namespace proof_system::plonk
+} // namespace plonk

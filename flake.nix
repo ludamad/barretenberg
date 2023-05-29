@@ -9,12 +9,10 @@
 
   outputs = { self, nixpkgs, flake-utils }:
     let
-      barretenbergOverlay = final: prev: {
-        barretenberg = prev.callPackage ./barretenberg.nix { };
-        barretenberg-wasm = prev.callPackage ./barretenberg-wasm.nix { };
-        barretenberg-transcript00 = prev.fetchurl {
-          url = "http://aztec-ignition.s3.amazonaws.com/MAIN%20IGNITION/monomial/transcript00.dat";
-          sha256 = "sha256-D5SzlCb1pX0aF3QmJPfTFwoy4Z1sXhbyAigUOdvkhpU=";
+      barretenbergOverlay = self: super: {
+        # It seems that llvmPackages_11 can't build WASI, so default to llvmPackages_12
+        barretenberg = super.callPackage ./barretenberg.nix {
+          llvmPackages = self.llvmPackages_12;
         };
       };
     in
@@ -35,7 +33,10 @@
                 value = pkgs.pkgsCross.aarch64-multiplatform-musl.pkgsLLVM.barretenberg;
               } ++ optional (pkgs.hostPlatform.isx86_64 && pkgs.hostPlatform.isDarwin) {
                 name = "cross-aarch64";
-                value = pkgs.pkgsCross.aarch64-darwin.barretenberg;
+                value = pkgs.pkgsCross.aarch64-darwin.barretenberg.override {
+                  # llvmPackages_12 seems to fail when we try to cross-compile but llvmPackages_11 works
+                  llvmPackages = pkgs.llvmPackages_11;
+                };
               }
             );
 
@@ -52,19 +53,20 @@
         in
         rec {
           packages = {
-            llvm11 = pkgs.barretenberg;
-            llvm12 = pkgs.barretenberg.override {
-              llvmPackages = pkgs.llvmPackages_12;
+            llvm11 = pkgs.barretenberg.override {
+              llvmPackages = pkgs.llvmPackages_11;
             };
+            llvm12 = pkgs.barretenberg;
             llvm13 = pkgs.barretenberg.override {
               llvmPackages = pkgs.llvmPackages_13;
             };
             llvm14 = pkgs.barretenberg.override {
               llvmPackages = pkgs.llvmPackages_14;
             };
-            wasm32 = pkgs.barretenberg-wasm;
+            wasm32 = pkgs.pkgsCross.wasi32.barretenberg;
 
-            default = packages.llvm11;
+            # Defaulting to llvm12 so we can ensure consistent shells
+            default = packages.llvm12;
           } // crossTargets;
 
           # Provide legacyPackages with our overlay so we can run
@@ -85,7 +87,6 @@
 
             wasm32 = pkgs.mkShell.override
               {
-                # TODO: This derivations forces wasi-sdk 12 so the stdenv will have the wrong tools
                 stdenv = packages.wasm32.stdenv;
               }
               ({

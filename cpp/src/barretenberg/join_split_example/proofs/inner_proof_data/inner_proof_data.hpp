@@ -8,6 +8,8 @@
 namespace join_split_example {
 namespace proofs {
 
+using namespace barretenberg;
+
 namespace InnerProofFields {
 enum {
     PROOF_ID,

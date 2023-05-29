@@ -9,7 +9,7 @@ namespace barretenberg::pairing {
 struct miller_lines;
 } // namespace barretenberg::pairing
 
-namespace proof_system {
+namespace bonk {
 
 using namespace barretenberg;
 
@@ -51,4 +51,4 @@ class PippengerReferenceStringFactory : public ReferenceStringFactory {
     uint8_t const* g2x_;
 };
 
-} // namespace proof_system
+} // namespace bonk

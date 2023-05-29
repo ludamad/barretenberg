@@ -1,33 +1,39 @@
 #pragma once
-#include "barretenberg/honk/flavor/standard.hpp"
 #include "barretenberg/plonk/proof_system/types/proof.hpp"
-#include "barretenberg/honk/sumcheck/sumcheck.hpp"
+#include "./program_settings.hpp"
+#include "barretenberg/proof_system/verification_key/verification_key.hpp"
+#include "barretenberg/transcript/manifest.hpp"
+#include "barretenberg/plonk/proof_system/commitment_scheme/commitment_scheme.hpp"
+#include "../sumcheck/sumcheck.hpp"
+#include "../sumcheck/relations/arithmetic_relation.hpp"
+#include "barretenberg/honk/pcs/commitment_key.hpp"
+#include "barretenberg/proof_system/flavor/flavor.hpp"
+#include "barretenberg/honk/pcs/gemini/gemini.hpp"
+#include "barretenberg/honk/pcs/shplonk/shplonk_single.hpp"
+#include "barretenberg/honk/pcs/kzg/kzg.hpp"
 
-namespace proof_system::honk {
-template <typename Flavor> class StandardVerifier_ {
-    using FF = typename Flavor::FF;
-    using Commitment = typename Flavor::Commitment;
-    using VerificationKey = typename Flavor::VerificationKey;
-    using PCSVerificationKey = typename Flavor::PCSParams::VK;
+namespace honk {
+template <typename program_settings> class Verifier {
 
   public:
-    StandardVerifier_(std::shared_ptr<VerificationKey> verifier_key = nullptr);
-    StandardVerifier_(StandardVerifier_&& other);
-    StandardVerifier_(const StandardVerifier_& other) = delete;
-    StandardVerifier_& operator=(const StandardVerifier_& other) = delete;
-    StandardVerifier_& operator=(StandardVerifier_&& other);
+    Verifier(std::shared_ptr<bonk::verification_key> verifier_key = nullptr,
+             const transcript::Manifest& manifest = honk::StandardHonk::create_manifest(0));
+    Verifier(Verifier&& other);
+    Verifier(const Verifier& other) = delete;
+    Verifier& operator=(const Verifier& other) = delete;
+    Verifier& operator=(Verifier&& other);
 
     bool verify_proof(const plonk::proof& proof);
+    transcript::Manifest manifest;
 
-    std::shared_ptr<VerificationKey> key;
-    std::map<std::string, Commitment> kate_g1_elements;
-    std::map<std::string, FF> kate_fr_elements;
-    std::shared_ptr<PCSVerificationKey> kate_verification_key;
-    VerifierTranscript<FF> transcript;
+    std::shared_ptr<bonk::verification_key> key;
+    std::map<std::string, barretenberg::g1::affine_element> kate_g1_elements;
+    std::map<std::string, barretenberg::fr> kate_fr_elements;
+    std::shared_ptr<pcs::kzg::VerificationKey> kate_verification_key;
 };
 
-extern template class StandardVerifier_<honk::flavor::Standard>;
+extern template class Verifier<honk::standard_verifier_settings>;
 
-using StandardVerifier = StandardVerifier_<honk::flavor::Standard>;
+typedef Verifier<honk::standard_verifier_settings> StandardVerifier;
 
-} // namespace proof_system::honk
+} // namespace honk

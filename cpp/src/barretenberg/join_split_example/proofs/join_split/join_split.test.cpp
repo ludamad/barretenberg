@@ -1,5 +1,3 @@
-#include <gtest/gtest.h>
-
 #include "../../constants.hpp"
 #include "../inner_proof_data/inner_proof_data.hpp"
 #include "index.hpp"
@@ -7,13 +5,11 @@
 #include "join_split_circuit.hpp"
 #include "barretenberg/common/streams.hpp"
 #include "barretenberg/common/test.hpp"
-#include "barretenberg/plonk/proof_system/proving_key/serialize.hpp"
+#include <gtest/gtest.h>
+#include "barretenberg/proof_system/proving_key/serialize.hpp"
 #include "barretenberg/stdlib/merkle_tree/index.hpp"
-#include "barretenberg/join_split_example/types.hpp"
 
 namespace join_split_example::proofs::join_split {
-
-using namespace proof_system::plonk::stdlib::merkle_tree;
 
 template <typename Composer> class join_split : public testing::Test {
 
@@ -126,8 +122,8 @@ constexpr bool CIRCUIT_CHANGE_EXPECTED = false;
 #endif
 
 using namespace barretenberg;
-using namespace proof_system::plonk::stdlib;
-using namespace proof_system::plonk::stdlib::merkle_tree;
+using namespace plonk::stdlib::types;
+using namespace plonk::stdlib::merkle_tree;
 using namespace join_split_example::proofs::notes::native;
 using key_pair = join_split_example::fixtures::grumpkin_key_pair;
 
@@ -143,9 +139,9 @@ class join_split_tests : public ::testing::Test {
     static constexpr size_t ACCOUNT_INDEX = 14;
     static void SetUpTestCase()
     {
-        auto null_crs_factory = std::make_shared<proof_system::ReferenceStringFactory>();
+        auto null_crs_factory = std::make_shared<bonk::ReferenceStringFactory>();
         init_proving_key(null_crs_factory, false);
-        auto crs_factory = std::make_unique<proof_system::FileReferenceStringFactory>("../srs_db/ignition");
+        auto crs_factory = std::make_unique<bonk::FileReferenceStringFactory>("../srs_db/ignition");
         init_verification_key(std::move(crs_factory));
         info("vk hash: ", get_verification_key()->sha256_hash());
     }
@@ -805,13 +801,11 @@ TEST_F(join_split_tests, test_0_input_notes_and_detect_circuit_change)
     EXPECT_TRUE(result.valid);
 
     // The below part detects any changes in the join-split circuit
-
-    constexpr uint32_t CIRCUIT_GATE_COUNT = 183834;
-    constexpr uint32_t GATES_NEXT_POWER_OF_TWO = 524288;
-    const uint256_t VK_HASH("5c2e0fe914dbbf23d6bac6ae4db9a7e43d98c0b9d71c9200208dbce24a815c6e");
+    constexpr uint32_t CIRCUIT_GATE_COUNT = 64000;
+    constexpr uint32_t GATES_NEXT_POWER_OF_TWO = 65536;
+    const uint256_t VK_HASH("bb2062d006d31d3234766277711eb28577d5f6082d0f484b87e8235628f8e864");
 
     auto number_of_gates_js = result.number_of_gates;
-    std::cout << get_verification_key()->sha256_hash() << std::endl;
     auto vk_hash_js = get_verification_key()->sha256_hash();
 
     if (!CIRCUIT_CHANGE_EXPECTED) {
@@ -2619,12 +2613,11 @@ TEST_F(join_split_tests, test_send_two_virtual_notes_full_proof)
 // Miscellaneous
 // *************************************************************************************************************
 
-TEST_F(join_split_tests, serialized_proving_key_size)
+TEST_F(join_split_tests, serialzed_proving_key_size)
 {
     uint8_t* ptr;
     auto len = join_split__get_new_proving_key_data(&ptr);
-
-    EXPECT_LE(len, 2315258552);
+    EXPECT_LE(len, 2 * 170 * 1024 * 1024);
 }
 
 } // namespace join_split_example::proofs::join_split

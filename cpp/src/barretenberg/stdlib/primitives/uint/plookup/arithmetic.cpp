@@ -2,9 +2,9 @@
 #include "uint.hpp"
 
 using namespace barretenberg;
-using namespace proof_system;
+using namespace bonk;
 
-namespace proof_system::plonk {
+namespace plonk {
 namespace stdlib {
 
 template <typename Composer, typename Native>
@@ -258,4 +258,4 @@ template class uint_plookup<plonk::UltraComposer, uint16_t>;
 template class uint_plookup<plonk::UltraComposer, uint32_t>;
 template class uint_plookup<plonk::UltraComposer, uint64_t>;
 } // namespace stdlib
-} // namespace proof_system::plonk
+} // namespace plonk

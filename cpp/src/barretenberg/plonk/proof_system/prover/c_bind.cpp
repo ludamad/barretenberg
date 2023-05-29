@@ -1,17 +1,12 @@
 #include "prover.hpp"
 #include "barretenberg/env/data_store.hpp"
-#include "barretenberg/env/crs.hpp"
-#include "barretenberg/serialize/test_helper.hpp"
-#include "barretenberg/serialize/raw_pointer.hpp"
 
-#define WASM_EXPORT extern "C" __attribute__((visibility("default")))
+#define WASM_EXPORT __attribute__((visibility("default")))
 
 using namespace barretenberg;
 
-// TODO(AD): This __wasm__ guard is a hack, but these test functions are currently
-// the only consumer of this API and it has no native definition.
-// Eventually, remove this, and don't rely on asyncify with Charlie's work.
-#ifdef __wasm__
+extern "C" {
+
 /**
  * Called by `barretenberg_wasm.test.ts` to test the asyncify intrumentation and logic that
  * allows for WASM code to make calls to async code in JS.
@@ -34,35 +29,8 @@ WASM_EXPORT void* test_async_func(size_t size, int val)
         return addr;
     }
 }
-#endif
 
-/**
- * @brief Simple wrapper for env_load_verifier_crs.
- * @return The CRS.
- */
-WASM_EXPORT void* test_env_load_verifier_crs()
-{
-    return env_load_verifier_crs();
-}
-/**
- * @brief Simple wrapper for env_load_verifier_crs.
- * @param The number of points to load of the prover CRS.
- * @return The CRS.
- */
-WASM_EXPORT void* test_env_load_prover_crs(size_t num_points)
-{
-    return env_load_prover_crs(num_points);
-}
-
-using WasmProver = plonk::UltraProver;
-
-typedef RawPointer<plonk::UltraProver> WasmProverPtr;
-
-// TODO(AD): Currently just a motivating example, TODO bind rest of library
-CBIND(prover_process_queue2, [](WasmProverPtr prover) {
-    prover->queue.process_queue();
-    return 0;
-});
+typedef std::conditional_t<plonk::SYSTEM_COMPOSER == plonk::TURBO, plonk::TurboProver, plonk::UltraProver> WasmProver;
 
 WASM_EXPORT void prover_process_queue(WasmProver* prover)
 {
@@ -181,4 +149,5 @@ WASM_EXPORT void* new_evaluation_domain(size_t circuit_size)
 WASM_EXPORT void delete_evaluation_domain(void* domain)
 {
     delete reinterpret_cast<evaluation_domain*>(domain);
+}
 }

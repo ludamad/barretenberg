@@ -1,6 +1,5 @@
 #pragma once
-
-#include "barretenberg/join_split_example/types.hpp"
+#include "barretenberg/stdlib/types/types.hpp"
 #include "../../native/claim/claim_note.hpp"
 #include "../../native/claim/claim_note_tx_data.hpp"
 #include "../../constants.hpp"
@@ -12,7 +11,7 @@ namespace notes {
 namespace circuit {
 namespace claim {
 
-using namespace proof_system::plonk::stdlib;
+using namespace plonk::stdlib::types;
 
 /**
  * Convert native claim note data into circuit witness data.

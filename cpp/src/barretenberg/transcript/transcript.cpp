@@ -6,8 +6,8 @@
 #include "barretenberg/common/net.hpp"
 #include "barretenberg/crypto/blake3s/blake3s.hpp"
 #include "barretenberg/crypto/keccak/keccak.hpp"
-#include "barretenberg/crypto/pedersen_commitment/pedersen.hpp"
-#include "barretenberg/crypto/pedersen_commitment/pedersen_lookup.hpp"
+#include "barretenberg/crypto/pedersen/pedersen.hpp"
+#include "barretenberg/crypto/pedersen/pedersen_lookup.hpp"
 #include <cstddef>
 #include <iomanip>
 #include <iostream>
@@ -46,27 +46,10 @@ std::array<uint8_t, Keccak256Hasher::PRNG_OUTPUT_SIZE> Keccak256Hasher::hash(std
 
 std::array<uint8_t, Blake3sHasher::PRNG_OUTPUT_SIZE> Blake3sHasher::hash(std::vector<uint8_t> const& buffer)
 {
-    grumpkin::fq input = grumpkin::fq::serialize_from_buffer(&buffer[0]);
-    grumpkin::fq compressed = crypto::pedersen_commitment::compress_native({ input });
-    std::vector<uint8_t> res = to_buffer(compressed);
+    std::vector<uint8_t> hash_result = blake3::blake3s(buffer);
     std::array<uint8_t, PRNG_OUTPUT_SIZE> result;
     for (size_t i = 0; i < PRNG_OUTPUT_SIZE; ++i) {
-        result[i] = res[i];
-    }
-    return result;
-}
-
-std::array<uint8_t, Blake3sHasher::PRNG_OUTPUT_SIZE> Blake3sHasher::hash_plookup(std::vector<uint8_t> const& buffer)
-{
-    // TODO(@zac-williamson) Change to call a Poseidon hash and create a PoseidonHasher
-    // (not making the name change right now as it will break concurrent work w. getting recursion working in Noir)
-    // We also need to implement a Poseidon gadget
-    grumpkin::fq input = grumpkin::fq::serialize_from_buffer(&buffer[0]);
-    grumpkin::fq compressed = crypto::pedersen_commitment::lookup::compress_native({ input });
-    std::vector<uint8_t> res = to_buffer(compressed);
-    std::array<uint8_t, PRNG_OUTPUT_SIZE> result;
-    for (size_t i = 0; i < PRNG_OUTPUT_SIZE; ++i) {
-        result[i] = res[i];
+        result[i] = hash_result[i];
     }
     return result;
 }
@@ -230,13 +213,13 @@ void Transcript::apply_fiat_shamir(const std::string& challenge_name /*, const b
         break;
     }
     case HashType::PedersenBlake3s: {
-        std::vector<uint8_t> compressed_buffer = to_buffer(crypto::pedersen_commitment::compress_native(buffer));
+        std::vector<uint8_t> compressed_buffer = to_buffer(crypto::pedersen::compress_native(buffer));
         base_hash = Blake3sHasher::hash(compressed_buffer);
         break;
     }
     case HashType::PlookupPedersenBlake3s: {
-        std::vector<uint8_t> compressed_buffer = crypto::pedersen_commitment::lookup::compress_native(buffer);
-        base_hash = Blake3sHasher::hash_plookup(compressed_buffer);
+        std::vector<uint8_t> compressed_buffer = crypto::pedersen::lookup::compress_native(buffer);
+        base_hash = Blake3sHasher::hash(compressed_buffer);
         break;
     }
     default: {
@@ -263,11 +246,7 @@ void Transcript::apply_fiat_shamir(const std::string& challenge_name /*, const b
     }
 
     std::vector<uint8_t> rolling_buffer(base_hash.begin(), base_hash.end());
-    if (hasher == HashType::Keccak256) {
-        rolling_buffer.push_back(0);
-    } else {
-        rolling_buffer[31] = (0);
-    }
+    rolling_buffer.push_back(0);
 
     // Compute how many hashes we need so that we have enough distinct chunks of 'random' bytes to distribute
     // across the num_challenges.
@@ -290,7 +269,7 @@ void Transcript::apply_fiat_shamir(const std::string& challenge_name /*, const b
             break;
         }
         case HashType::PlookupPedersenBlake3s: {
-            hash_output = Blake3sHasher::hash_plookup(rolling_buffer);
+            hash_output = Blake3sHasher::hash(rolling_buffer);
             break;
         }
         default: {
@@ -398,6 +377,7 @@ std::array<uint8_t, Transcript::PRNG_OUTPUT_SIZE> Transcript::get_challenge_from
  * */
 size_t Transcript::get_num_challenges(const std::string& challenge_name) const
 {
+    // printf("getting challenge count for %s \n", challenge_name.c_str());
     ASSERT(challenges.count(challenge_name) == 1);
 
     return challenges.at(challenge_name).size();
@@ -413,6 +393,7 @@ size_t Transcript::get_num_challenges(const std::string& challenge_name) const
  * */
 std::vector<uint8_t> Transcript::get_element(const std::string& element_name) const
 {
+    // printf("getting element %s \n", element_name.c_str());
     ASSERT(elements.count(element_name) == 1);
     return elements.at(element_name);
 }

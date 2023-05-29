@@ -10,7 +10,7 @@ namespace barretenberg::pairing {
 struct miller_lines;
 } // namespace barretenberg::pairing
 
-namespace proof_system {
+namespace bonk {
 
 class VerifierReferenceString {
   public:
@@ -40,4 +40,4 @@ class ReferenceStringFactory {
     virtual std::shared_ptr<VerifierReferenceString> get_verifier_crs() { return nullptr; }
 };
 
-} // namespace proof_system
+} // namespace bonk

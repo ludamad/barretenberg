@@ -19,7 +19,8 @@ namespace {
 auto& engine = numeric::random::get_debug_engine();
 }
 
-using namespace proof_system::plonk;
+// using namespace barretenberg;
+using namespace plonk;
 
 // One can only define a TYPED_TEST with a single template paramter.
 // Our workaround is to pass parameters of the following type.
@@ -415,7 +416,7 @@ template <typename TestType> class stdlib_biggroup : public testing::Test {
         EXPECT_VERIFICATION(composer);
     }
 
-    static void test_multiple_montgomery_ladder()
+    static void test_double_montgomery_ladder()
     {
         Composer composer = Composer();
         size_t num_repetitions = 10;
@@ -423,17 +424,19 @@ template <typename TestType> class stdlib_biggroup : public testing::Test {
             affine_element acc_small(element::random_element());
             element_ct acc_big = element_ct::from_witness(&composer, acc_small);
 
-            std::vector<typename element_ct::chain_add_accumulator> to_add;
-            for (size_t j = 0; j < i; ++j) {
-                affine_element add_1_small_0(element::random_element());
-                element_ct add_1_big_0 = element_ct::from_witness(&composer, add_1_small_0);
-                affine_element add_2_small_0(element::random_element());
-                element_ct add_2_big_0 = element_ct::from_witness(&composer, add_2_small_0);
-                typename element_ct::chain_add_accumulator add_1 =
-                    element_ct::chain_add_start(add_1_big_0, add_2_big_0);
-                to_add.emplace_back(add_1);
-            }
-            acc_big.multiple_montgomery_ladder(to_add);
+            affine_element add_1_small_0(element::random_element());
+            element_ct add_1_big_0 = element_ct::from_witness(&composer, add_1_small_0);
+            affine_element add_2_small_0(element::random_element());
+            element_ct add_2_big_0 = element_ct::from_witness(&composer, add_2_small_0);
+
+            affine_element add_1_small_1(element::random_element());
+            element_ct add_1_big_1 = element_ct::from_witness(&composer, add_1_small_1);
+            affine_element add_2_small_1(element::random_element());
+            element_ct add_2_big_1 = element_ct::from_witness(&composer, add_2_small_1);
+
+            typename element_ct::chain_add_accumulator add_1 = element_ct::chain_add_start(add_1_big_0, add_1_big_1);
+            typename element_ct::chain_add_accumulator add_2 = element_ct::chain_add_start(add_2_big_0, add_2_big_1);
+            acc_big.double_montgomery_ladder(add_1, add_2);
         }
 
         EXPECT_VERIFICATION(composer);
@@ -888,16 +891,16 @@ HEAVY_TYPED_TEST(stdlib_biggroup, chain_add)
 
     TestFixture::test_chain_add();
 }
-HEAVY_TYPED_TEST(stdlib_biggroup, multiple_montgomery_ladder)
+HEAVY_TYPED_TEST(stdlib_biggroup, double_montgomery_ladder)
 {
 
-    TestFixture::test_multiple_montgomery_ladder();
+    TestFixture::test_double_montgomery_ladder();
 }
 
 HEAVY_TYPED_TEST(stdlib_biggroup, compute_naf)
 {
     // ULTRATODO: make this work for secp curves
-    if constexpr (TypeParam::Curve::type == CurveType::BN254) {
+    if constexpr (TypeParam::Curve::type == bonk::CurveType::BN254) {
         size_t num_repetitions = 1;
         for (size_t i = 0; i < num_repetitions; i++) {
             TestFixture::test_compute_naf();
@@ -910,7 +913,7 @@ HEAVY_TYPED_TEST(stdlib_biggroup, compute_naf)
 /* These tests only work for UltraComposer */
 HEAVY_TYPED_TEST(stdlib_biggroup, wnaf_batch_mul)
 {
-    if constexpr (TypeParam::Curve::Composer::type == ComposerType::PLOOKUP) {
+    if constexpr (TypeParam::Curve::Composer::type == plonk::ComposerType::PLOOKUP) {
         TestFixture::test_compute_wnaf();
     } else {
         GTEST_SKIP();
@@ -921,7 +924,7 @@ HEAVY_TYPED_TEST(stdlib_biggroup, wnaf_batch_mul)
    Fr is a bigfield. */
 HEAVY_TYPED_TEST(stdlib_biggroup, compute_wnaf)
 {
-    if constexpr (TypeParam::Curve::Composer::type != UltraComposer::type && TypeParam::use_bigfield) {
+    if constexpr (TypeParam::Curve::Composer::type != plonk::UltraComposer::type && TypeParam::use_bigfield) {
         GTEST_SKIP();
     } else {
         TestFixture::test_compute_wnaf();
@@ -958,7 +961,7 @@ HEAVY_TYPED_TEST(stdlib_biggroup, wnaf_batch_4)
 /* The following tests are specific to BN254 and don't work when Fr is a bigfield */
 HEAVY_TYPED_TEST(stdlib_biggroup, bn254_endo_batch_mul)
 {
-    if constexpr (TypeParam::Curve::type == CurveType::BN254 && !TypeParam::use_bigfield) {
+    if constexpr (TypeParam::Curve::type == bonk::CurveType::BN254 && !TypeParam::use_bigfield) {
         TestFixture::test_bn254_endo_batch_mul();
     } else {
         GTEST_SKIP();
@@ -966,7 +969,7 @@ HEAVY_TYPED_TEST(stdlib_biggroup, bn254_endo_batch_mul)
 }
 HEAVY_TYPED_TEST(stdlib_biggroup, mixed_mul_bn254_endo)
 {
-    if constexpr (TypeParam::Curve::type == CurveType::BN254 && !TypeParam::use_bigfield) {
+    if constexpr (TypeParam::Curve::type == bonk::CurveType::BN254 && !TypeParam::use_bigfield) {
         TestFixture::test_mixed_mul_bn254_endo();
     } else {
         GTEST_SKIP();
@@ -976,7 +979,7 @@ HEAVY_TYPED_TEST(stdlib_biggroup, mixed_mul_bn254_endo)
 /* The following tests are specific to SECP256k1 */
 HEAVY_TYPED_TEST(stdlib_biggroup, wnaf_secp256k1)
 {
-    if constexpr (TypeParam::Curve::type == CurveType::SECP256K1) {
+    if constexpr (TypeParam::Curve::type == bonk::CurveType::SECP256K1) {
         TestFixture::test_wnaf_secp256k1();
     } else {
         GTEST_SKIP();
@@ -984,7 +987,7 @@ HEAVY_TYPED_TEST(stdlib_biggroup, wnaf_secp256k1)
 }
 HEAVY_TYPED_TEST(stdlib_biggroup, wnaf_8bit_secp256k1)
 {
-    if constexpr (TypeParam::Curve::type == CurveType::SECP256K1) {
+    if constexpr (TypeParam::Curve::type == bonk::CurveType::SECP256K1) {
         TestFixture::test_wnaf_8bit_secp256k1();
     } else {
         GTEST_SKIP();
@@ -992,7 +995,7 @@ HEAVY_TYPED_TEST(stdlib_biggroup, wnaf_8bit_secp256k1)
 }
 HEAVY_TYPED_TEST(stdlib_biggroup, ecdsa_mul_secp256k1)
 {
-    if constexpr (TypeParam::Curve::type == CurveType::SECP256K1) {
+    if constexpr (TypeParam::Curve::type == bonk::CurveType::SECP256K1) {
         TestFixture::test_ecdsa_mul_secp256k1();
     } else {
         GTEST_SKIP();

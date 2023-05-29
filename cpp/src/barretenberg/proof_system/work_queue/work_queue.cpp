@@ -3,7 +3,7 @@
 #include "barretenberg/ecc/curves/bn254/scalar_multiplication/scalar_multiplication.hpp"
 #include "barretenberg/polynomials/polynomial_arithmetic.hpp"
 
-namespace proof_system::plonk {
+namespace bonk {
 
 work_queue::work_queue(proving_key* prover_key, transcript::StandardTranscript* prover_transcript)
     : key(prover_key)
@@ -50,7 +50,7 @@ size_t work_queue::get_scalar_multiplication_size(const size_t work_item_number)
     for (const auto& item : work_item_queue) {
         if (item.work_type == WorkType::SCALAR_MULTIPLICATION) {
             if (count == work_item_number) {
-                return static_cast<size_t>(static_cast<uint256_t>(item.constant));
+                return (item.constant == MSMType::MONOMIAL_N_PLUS_ONE) ? key->circuit_size + 1 : key->circuit_size;
             }
             ++count;
         }
@@ -198,12 +198,39 @@ void work_queue::process_queue()
         switch (item.work_type) {
         // most expensive op
         case WorkType::SCALAR_MULTIPLICATION: {
-            // Note: work_item.constant is an Fr type (see SMALL_FFT), but here it is interpreted simply as a size_t
-            auto msm_size = static_cast<size_t>(static_cast<uint256_t>(item.constant));
-
-            ASSERT(msm_size <= key->reference_string->get_monomial_size());
-
-            barretenberg::g1::affine_element* srs_points = key->reference_string->get_monomial_points();
+            // We use the variable work_item::constant to set the size of the multi-scalar multiplication.
+            // Note that a size (n+1) MSM is always needed to commit to the quotient polynomial parts t_1, t_2
+            // and t_3 for Standard/Turbo/Ultra due to the addition of blinding factors
+            size_t msm_size = 0;
+            barretenberg::g1::affine_element* srs_points;
+            switch (static_cast<size_t>(uint256_t(item.constant))) {
+            case MSMType::MONOMIAL_N: {
+                if (key->reference_string->get_monomial_size() < key->small_domain.size) {
+                    info("MSM: Monomial reference string size: ",
+                         key->reference_string->get_monomial_size(),
+                         ", required size: ",
+                         key->small_domain.size);
+                }
+                msm_size = key->small_domain.size;
+                srs_points = key->reference_string->get_monomial_points();
+                break;
+            }
+            case MSMType::MONOMIAL_N_PLUS_ONE: {
+                if (key->reference_string->get_monomial_size() < key->small_domain.size + 1) {
+                    info("MSM: Monomial reference string size: ",
+                         key->reference_string->get_monomial_size(),
+                         ", required size: ",
+                         key->small_domain.size + 1);
+                }
+                msm_size = key->small_domain.size + 1;
+                srs_points = key->reference_string->get_monomial_points();
+                break;
+            }
+            default: {
+                info("Incorrect item constant value: ", static_cast<size_t>(uint256_t(item.constant)));
+                srs_points = key->reference_string->get_monomial_points();
+            }
+            }
 
             // Run pippenger multi-scalar multiplication.
             auto runtime_state = barretenberg::scalar_multiplication::pippenger_runtime_state(msm_size);
@@ -220,23 +247,18 @@ void work_queue::process_queue()
             using namespace barretenberg;
             const size_t n = key->circuit_size;
             polynomial& wire = key->polynomial_store.get(item.tag);
+            polynomial wire_fft(4 * n + 4);
 
             polynomial wire_copy(wire, n);
             wire_copy.coset_fft_with_generator_shift(key->small_domain, item.constant);
 
-            if (item.index != 0) {
-                polynomial& old_wire_fft = key->polynomial_store.get(item.tag + "_fft");
-                for (size_t i = 0; i < n; ++i) {
-                    old_wire_fft[4 * i + item.index] = wire_copy[i];
-                }
-                old_wire_fft[4 * n + item.index] = wire_copy[0];
-            } else {
-                polynomial wire_fft(4 * n + 4);
-                for (size_t i = 0; i < n; ++i) {
-                    wire_fft[4 * i + item.index] = wire_copy[i];
-                }
-                key->polynomial_store.put(item.tag + "_fft", std::move(wire_fft));
+            for (size_t i = 0; i < n; ++i) {
+                wire_fft[4 * i + item.index] = wire_copy[i];
             }
+            wire_fft[4 * n + item.index] = wire_copy[0];
+
+            key->polynomial_store.put(item.tag + "_fft", 4 * n + 4);
+
             break;
         }
         case WorkType::FFT: {
@@ -278,4 +300,4 @@ std::vector<work_queue::work_item> work_queue::get_queue() const
     return work_item_queue;
 }
 
-} // namespace proof_system::plonk
+} // namespace bonk

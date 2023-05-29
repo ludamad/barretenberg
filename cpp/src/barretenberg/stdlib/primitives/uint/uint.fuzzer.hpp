@@ -3,9 +3,6 @@
 #include "barretenberg/stdlib/primitives/field/field.hpp"
 #include "barretenberg/stdlib/primitives/byte_array/byte_array.hpp"
 #include "barretenberg/stdlib/primitives/bool/bool.hpp"
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wc99-designator"
-
 // This is a global variable, so that the execution handling class could alter it and signal to the input tester that
 // the input should fail
 bool circuit_should_fail = false;
@@ -31,13 +28,13 @@ FastRandom VarianceRNG(0);
  */
 template <typename Composer> class UintFuzzBase {
   private:
-    typedef proof_system::plonk::stdlib::bool_t<Composer> bool_t;
-    typedef proof_system::plonk::stdlib::uint<Composer, uint8_t> uint_8_t;
-    typedef proof_system::plonk::stdlib::uint<Composer, uint16_t> uint_16_t;
-    typedef proof_system::plonk::stdlib::uint<Composer, uint32_t> uint_32_t;
-    typedef proof_system::plonk::stdlib::uint<Composer, uint64_t> uint_64_t;
-    typedef proof_system::plonk::stdlib::field_t<Composer> field_t;
-    typedef proof_system::plonk::stdlib::byte_array<Composer> byte_array_t;
+    typedef plonk::stdlib::bool_t<Composer> bool_t;
+    typedef plonk::stdlib::uint<Composer, uint8_t> uint_8_t;
+    typedef plonk::stdlib::uint<Composer, uint16_t> uint_16_t;
+    typedef plonk::stdlib::uint<Composer, uint32_t> uint_32_t;
+    typedef plonk::stdlib::uint<Composer, uint64_t> uint_64_t;
+    typedef plonk::stdlib::field_t<Composer> field_t;
+    typedef plonk::stdlib::byte_array<Composer> byte_array_t;
 
     template <class From, class To> static To from_to(const From& in, const std::optional<size_t> size = std::nullopt)
     {
@@ -104,7 +101,9 @@ template <typename Composer> class UintFuzzBase {
          * @param rng PRNG used
          * @return A random instruction
          */
-        template <typename T> inline static Instruction generateRandom(T& rng) requires SimpleRng<T>
+        template <typename T>
+        inline static Instruction generateRandom(T& rng)
+            requires SimpleRng<T>
         {
             // Choose which instruction we are going to generate
             OPCODE instruction_opcode = static_cast<OPCODE>(rng.next() % (OPCODE::_LAST));
@@ -164,9 +163,8 @@ template <typename Composer> class UintFuzzBase {
          * @return Mutated instruction
          */
         template <typename T>
-        inline static Instruction mutateInstruction(Instruction instruction,
-                                                    T& rng,
-                                                    HavocSettings& havoc_config) requires SimpleRng<T>
+        inline static Instruction mutateInstruction(Instruction instruction, T& rng, HavocSettings& havoc_config)
+            requires SimpleRng<T>
         {
             (void)rng;
             (void)havoc_config;
@@ -1585,5 +1583,3 @@ extern "C" size_t LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
     RunWithComposers<UintFuzzBase, FuzzerComposerTypes>(Data, Size, VarianceRNG);
     return 0;
 }
-
-#pragma clang diagnostic pop

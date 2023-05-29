@@ -1,6 +1,6 @@
 #pragma once
 #include "barretenberg/common/serialize.hpp"
-#include "barretenberg/crypto/pedersen_commitment/pedersen.hpp"
+#include "barretenberg/crypto/pedersen/pedersen.hpp"
 #include "barretenberg/ecc/curves/grumpkin/grumpkin.hpp"
 #include "../../constants.hpp"
 
@@ -10,9 +10,11 @@ namespace notes {
 namespace native {
 namespace claim {
 
+using namespace barretenberg;
+
 inline auto compute_nullifier(grumpkin::fq const& note_commitment)
 {
-    return crypto::pedersen_commitment::compress_native({ note_commitment }, GeneratorIndex::CLAIM_NOTE_NULLIFIER);
+    return crypto::pedersen::compress_native({ note_commitment }, GeneratorIndex::CLAIM_NOTE_NULLIFIER);
 }
 
 } // namespace claim

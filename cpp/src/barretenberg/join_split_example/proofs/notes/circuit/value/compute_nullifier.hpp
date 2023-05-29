@@ -1,10 +1,13 @@
 #pragma once
-#include "barretenberg/join_split_example/types.hpp"
+#include "barretenberg/stdlib/types/types.hpp"
 
 namespace join_split_example {
 namespace proofs {
 namespace notes {
 namespace circuit {
+
+using namespace barretenberg;
+using namespace plonk::stdlib::types;
 
 field_ct compute_nullifier(field_ct const& note_commitment,
                            field_ct const& account_private_key,

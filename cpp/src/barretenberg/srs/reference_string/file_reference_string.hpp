@@ -15,7 +15,7 @@ namespace barretenberg::pairing {
 struct miller_lines;
 } // namespace barretenberg::pairing
 
-namespace proof_system {
+namespace bonk {
 
 using namespace barretenberg;
 
@@ -99,4 +99,4 @@ class DynamicFileReferenceStringFactory : public ReferenceStringFactory {
     std::shared_ptr<VerifierFileReferenceString> verifier_crs_;
 };
 
-} // namespace proof_system
+} // namespace bonk

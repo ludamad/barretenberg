@@ -2,9 +2,9 @@
 #include "uint.hpp"
 
 using namespace barretenberg;
-using namespace proof_system;
+using namespace bonk;
 
-namespace proof_system::plonk {
+namespace plonk {
 namespace stdlib {
 
 /**
@@ -413,4 +413,4 @@ template class uint<plonk::StandardPlonkComposer, uint32_t>;
 template class uint<plonk::StandardPlonkComposer, uint64_t>;
 
 } // namespace stdlib
-} // namespace proof_system::plonk
+} // namespace plonk

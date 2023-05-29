@@ -2,7 +2,7 @@
 #include "hash_path.hpp"
 #include "barretenberg/stdlib/primitives/field/field.hpp"
 
-namespace proof_system::plonk {
+namespace plonk {
 namespace stdlib {
 namespace merkle_tree {
 
@@ -29,7 +29,7 @@ template <typename Store> class MerkleTree {
 
     index_t size() const;
 
-  protected:
+  private:
     void load_metadata();
 
     /**
@@ -88,7 +88,7 @@ template <typename Store> class MerkleTree {
 
     void remove(fr const& key);
 
-  protected:
+  private:
     Store& store_;
     std::vector<fr> zero_hashes_;
     size_t depth_;
@@ -99,4 +99,4 @@ extern template class MerkleTree<MemoryStore>;
 
 } // namespace merkle_tree
 } // namespace stdlib
-} // namespace proof_system::plonk
+} // namespace plonk

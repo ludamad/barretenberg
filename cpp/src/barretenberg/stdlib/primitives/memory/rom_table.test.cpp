@@ -8,10 +8,10 @@
 
 namespace test_stdlib_rom_array {
 using namespace barretenberg;
-using namespace proof_system::plonk;
+using namespace plonk;
 
 // Defining ultra-specific types for local testing.
-using Composer = proof_system::plonk::UltraComposer;
+using Composer = plonk::UltraComposer;
 using field_ct = stdlib::field_t<Composer>;
 using witness_ct = stdlib::witness_t<Composer>;
 using rom_table_ct = stdlib::rom_table<Composer>;
