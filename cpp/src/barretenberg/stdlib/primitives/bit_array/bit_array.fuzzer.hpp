@@ -1,5 +1,7 @@
 #include "barretenberg/numeric/random/engine.hpp"
 #include "barretenberg/stdlib/primitives/bit_array/bit_array.hpp"
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wc99-designator"
 
 #define MAX_ARRAY_SIZE 128
 
@@ -28,8 +30,8 @@ FastRandom VarianceRNG(0);
  */
 template <typename Composer> class BitArrayFuzzBase {
   private:
-    typedef plonk::stdlib::bit_array<Composer> bit_array_t;
-    typedef plonk::stdlib::byte_array<Composer> byte_array_t;
+    typedef proof_system::plonk::stdlib::bit_array<Composer> bit_array_t;
+    typedef proof_system::plonk::stdlib::byte_array<Composer> byte_array_t;
     template <size_t NumBytes, size_t NumWords>
     static std::vector<uint8_t> to_vector(std::array<plonk::stdlib::uint32<Composer>, NumWords>& a32)
     {
@@ -168,9 +170,7 @@ template <typename Composer> class BitArrayFuzzBase {
          * @param rng PRNG used
          * @return A random instruction
          */
-        template <typename T>
-        inline static Instruction generateRandom(T& rng)
-            requires SimpleRng<T>
+        template <typename T> inline static Instruction generateRandom(T& rng) requires SimpleRng<T>
         {
             // Choose which instruction we are going to generate
             OPCODE instruction_opcode = static_cast<OPCODE>(rng.next() % (OPCODE::_LAST));
@@ -229,8 +229,9 @@ template <typename Composer> class BitArrayFuzzBase {
          * @return Mutated instruction
          */
         template <typename T>
-        inline static Instruction mutateInstruction(Instruction instruction, T& rng, HavocSettings& havoc_config)
-            requires SimpleRng<T>
+        inline static Instruction mutateInstruction(Instruction instruction,
+                                                    T& rng,
+                                                    HavocSettings& havoc_config) requires SimpleRng<T>
         {
             (void)rng;
             (void)havoc_config;
@@ -920,3 +921,5 @@ extern "C" size_t LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
     RunWithComposers<BitArrayFuzzBase, FuzzerComposerTypes>(Data, Size, VarianceRNG);
     return 0;
 }
+
+#pragma clang diagnostic pop

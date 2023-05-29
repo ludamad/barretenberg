@@ -8,7 +8,8 @@ namespace transcript {
 class Transcript;
 }
 
-namespace bonk {
+// TODO(Cody) Fix this namespace.
+namespace proof_system::plonk {
 
 struct proving_key;
 
@@ -52,4 +53,4 @@ class ProverRandomWidget {
     proving_key* key;
 };
 
-} // namespace bonk
+} // namespace proof_system::plonk

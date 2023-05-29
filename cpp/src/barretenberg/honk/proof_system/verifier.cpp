@@ -1,50 +1,28 @@
-#include <cmath>
-#include "barretenberg/common/throw_or_abort.hpp"
-#include <cstddef>
-#include <memory>
-#include "barretenberg/plonk/proof_system/constants.hpp"
 #include "./verifier.hpp"
-#include "barretenberg/plonk/proof_system/public_inputs/public_inputs.hpp"
-#include "barretenberg/ecc/curves/bn254/fr.hpp"
-#include "barretenberg/honk/pcs/commitment_key.hpp"
-#include "barretenberg/honk/pcs/gemini/gemini.hpp"
-#include "barretenberg/honk/pcs/kzg/kzg.hpp"
+#include "barretenberg/honk/transcript/transcript.hpp"
 #include "barretenberg/numeric/bitop/get_msb.hpp"
-#include "barretenberg/proof_system/flavor/flavor.hpp"
-#include "barretenberg/proof_system/polynomial_store/polynomial_store.hpp"
-#include "barretenberg/ecc/curves/bn254/fq12.hpp"
-#include "barretenberg/ecc/curves/bn254/pairing.hpp"
+#include "barretenberg/honk/flavor/standard.hpp"
 #include "barretenberg/ecc/curves/bn254/scalar_multiplication/scalar_multiplication.hpp"
-#include "barretenberg/polynomials/polynomial_arithmetic.hpp"
-#include "barretenberg/honk/composer/composer_helper/permutation_helper.hpp"
-#include <math.h>
-#include <string>
 #include "barretenberg/honk/utils/power_polynomial.hpp"
-#include "barretenberg/honk/sumcheck/relations/grand_product_computation_relation.hpp"
-#include "barretenberg/honk/sumcheck/relations/grand_product_initialization_relation.hpp"
 
 using namespace barretenberg;
-using namespace honk::sumcheck;
+using namespace proof_system::honk::sumcheck;
 
-namespace honk {
-template <typename program_settings>
-Verifier<program_settings>::Verifier(std::shared_ptr<bonk::verification_key> verifier_key,
-                                     const transcript::Manifest& input_manifest)
-    : manifest(input_manifest)
-    , key(verifier_key)
+namespace proof_system::honk {
+template <typename Flavor>
+StandardVerifier_<Flavor>::StandardVerifier_(std::shared_ptr<typename Flavor::VerificationKey> verifier_key)
+    : key(verifier_key)
 {}
 
-template <typename program_settings>
-Verifier<program_settings>::Verifier(Verifier&& other)
-    : manifest(other.manifest)
-    , key(other.key)
+template <typename Flavor>
+StandardVerifier_<Flavor>::StandardVerifier_(StandardVerifier_&& other)
+    : key(other.key)
     , kate_verification_key(std::move(other.kate_verification_key))
 {}
 
-template <typename program_settings> Verifier<program_settings>& Verifier<program_settings>::operator=(Verifier&& other)
+template <typename Flavor> StandardVerifier_<Flavor>& StandardVerifier_<Flavor>::operator=(StandardVerifier_&& other)
 {
     key = other.key;
-    manifest = other.manifest;
     kate_verification_key = (std::move(other.kate_verification_key));
     kate_g1_elements.clear();
     kate_fr_elements.clear();
@@ -77,139 +55,121 @@ template <typename program_settings> Verifier<program_settings>& Verifier<progra
         [Q]_1,
         [W]_1
 */
-template <typename program_settings> bool Verifier<program_settings>::verify_proof(const plonk::proof& proof)
+template <typename Flavor> bool StandardVerifier_<Flavor>::verify_proof(const plonk::proof& proof)
 {
-    using FF = typename program_settings::fr;
-    using Commitment = barretenberg::g1::element;
-    using Transcript = typename program_settings::Transcript;
+    using FF = typename Flavor::FF;
+    using GroupElement = typename Flavor::GroupElement;
+    using Commitment = typename Flavor::Commitment;
     using Gemini = pcs::gemini::MultilinearReductionScheme<pcs::kzg::Params>;
     using Shplonk = pcs::shplonk::SingleBatchOpeningScheme<pcs::kzg::Params>;
     using KZG = pcs::kzg::UnivariateOpeningScheme<pcs::kzg::Params>;
-    const size_t NUM_POLYNOMIALS = bonk::StandardArithmetization::NUM_POLYNOMIALS;
-    const size_t NUM_UNSHIFTED = bonk::StandardArithmetization::NUM_UNSHIFTED_POLYNOMIALS;
-    const size_t NUM_PRECOMPUTED = bonk::StandardArithmetization::NUM_PRECOMPUTED_POLYNOMIALS;
+    using VerifierCommitments = typename Flavor::VerifierCommitments;
+    using CommitmentLabels = typename Flavor::CommitmentLabels;
 
-    key->program_width = program_settings::program_width;
+    transcript = VerifierTranscript<FF>{ proof.proof_data };
 
-    size_t log_n(numeric::get_msb(key->circuit_size));
+    auto commitments = VerifierCommitments(key);
+    auto commitment_labels = CommitmentLabels();
 
-    // Add the proof data to the transcript, according to the manifest. Also initialise the transcript's hash type
-    // and challenge bytes.
-    auto transcript = transcript::StandardTranscript(
-        proof.proof_data, manifest, program_settings::hash_type, program_settings::num_challenge_bytes);
+    // TODO(Adrian): Change the initialization of the transcript to take the VK hash?
+    const auto circuit_size = transcript.template receive_from_prover<uint32_t>("circuit_size");
+    const auto public_input_size = transcript.template receive_from_prover<uint32_t>("public_input_size");
 
-    // Add the circuit size and the number of public inputs) to the transcript.
-    transcript.add_element("circuit_size",
-                           { static_cast<uint8_t>(key->circuit_size >> 24),
-                             static_cast<uint8_t>(key->circuit_size >> 16),
-                             static_cast<uint8_t>(key->circuit_size >> 8),
-                             static_cast<uint8_t>(key->circuit_size) });
-
-    transcript.add_element("public_input_size",
-                           { static_cast<uint8_t>(key->num_public_inputs >> 24),
-                             static_cast<uint8_t>(key->num_public_inputs >> 16),
-                             static_cast<uint8_t>(key->num_public_inputs >> 8),
-                             static_cast<uint8_t>(key->num_public_inputs) });
-
-    // Compute challenges from the proof data, based on the manifest, using the Fiat-Shamir heuristic
-    transcript.apply_fiat_shamir("init");
-    transcript.apply_fiat_shamir("eta");
-    transcript.apply_fiat_shamir("beta");
-    transcript.apply_fiat_shamir("alpha");
-    for (size_t idx = 0; idx < log_n; idx++) {
-        transcript.apply_fiat_shamir("u_" + std::to_string(idx));
+    if (circuit_size != key->circuit_size) {
+        return false;
     }
-    transcript.apply_fiat_shamir("rho");
-    transcript.apply_fiat_shamir("r");
-    transcript.apply_fiat_shamir("nu");
-    transcript.apply_fiat_shamir("z");
-    transcript.apply_fiat_shamir("separator");
+    if (public_input_size != key->num_public_inputs) {
+        return false;
+    }
 
-    // // TODO(Cody): Compute some basic public polys like id(X), pow(X), and any required Lagrange polys
+    std::vector<FF> public_inputs;
+    for (size_t i = 0; i < public_input_size; ++i) {
+        auto public_input_i = transcript.template receive_from_prover<FF>("public_input_" + std::to_string(i));
+        public_inputs.emplace_back(public_input_i);
+    }
+
+    // Get commitments to the wires
+    commitments.w_l = transcript.template receive_from_prover<Commitment>(commitment_labels.w_l);
+    commitments.w_r = transcript.template receive_from_prover<Commitment>(commitment_labels.w_r);
+    commitments.w_o = transcript.template receive_from_prover<Commitment>(commitment_labels.w_o);
+
+    // Get permutation challenges
+    auto [beta, gamma] = transcript.get_challenges("beta", "gamma");
+
+    const FF public_input_delta = compute_public_input_delta<FF>(public_inputs, beta, gamma, circuit_size);
+
+    sumcheck::RelationParameters<FF> relation_parameters{
+        .beta = beta,
+        .gamma = gamma,
+        .public_input_delta = public_input_delta,
+    };
+
+    // Get commitment to Z_PERM
+    commitments.z_perm = transcript.template receive_from_prover<Commitment>(commitment_labels.z_perm);
 
     // Execute Sumcheck Verifier
-    auto sumcheck = Sumcheck<FF,
-                             Transcript,
-                             ArithmeticRelation,
-                             GrandProductComputationRelation,
-                             GrandProductInitializationRelation>(transcript);
-    bool sumcheck_result = sumcheck.execute_verifier();
+    auto sumcheck = Sumcheck<Flavor, VerifierTranscript<FF>>(circuit_size, transcript);
+    std::optional sumcheck_output = sumcheck.execute_verifier(relation_parameters);
+
+    // If Sumcheck does not return an output, sumcheck verification has failed
+    if (!sumcheck_output.has_value()) {
+        return false;
+    }
+
+    auto [multivariate_challenge, purported_evaluations] = *sumcheck_output;
 
     // Execute Gemini/Shplonk verification:
 
     // Construct inputs for Gemini verifier:
     // - Multivariate opening point u = (u_0, ..., u_{d-1})
     // - batched unshifted and to-be-shifted polynomial commitments
-    std::vector<FF> opening_point; // u = (u_0,...,u_{d-1})
-    auto batched_commitment_unshifted = Commitment::zero();
-    auto batched_commitment_to_be_shifted = Commitment::zero();
-
-    // Construct MLE opening point
-    for (size_t round_idx = 0; round_idx < key->log_circuit_size; round_idx++) {
-        std::string label = "u_" + std::to_string(round_idx);
-        opening_point.emplace_back(transcript.get_challenge_field_element(label));
-    }
+    auto batched_commitment_unshifted = GroupElement::zero();
+    auto batched_commitment_to_be_shifted = GroupElement::zero();
 
     // Compute powers of batching challenge rho
-    Fr rho = Fr::serialize_from_buffer(transcript.get_challenge("rho").begin());
-    std::vector<Fr> rhos = Gemini::powers_of_rho(rho, NUM_POLYNOMIALS);
-
-    // Get vector of multivariate evaluations produced by Sumcheck
-    auto multivariate_evaluations = transcript.get_field_element_vector("multivariate_evaluations");
+    FF rho = transcript.get_challenge("rho");
+    std::vector<FF> rhos = Gemini::powers_of_rho(rho, Flavor::NUM_ALL_ENTITIES);
 
     // Compute batched multivariate evaluation
-    Fr batched_evaluation = Fr::zero();
-    for (size_t i = 0; i < NUM_POLYNOMIALS; ++i) {
-        batched_evaluation += multivariate_evaluations[i] * rhos[i];
+    FF batched_evaluation = FF::zero();
+    size_t evaluation_idx = 0;
+    for (auto& value : purported_evaluations.get_unshifted_then_shifted()) {
+        batched_evaluation += value * rhos[evaluation_idx];
+        ++evaluation_idx;
     }
 
     // Construct batched commitment for NON-shifted polynomials
-    for (size_t i = 0; i < NUM_UNSHIFTED; ++i) {
-        Commitment commitment;
-        if (i < NUM_PRECOMPUTED) { // if precomputed, commitment comes from verification key
-            commitment = key->commitments[bonk::StandardArithmetization::ENUM_TO_COMM[i]];
-        } else { // if witness, commitment comes from prover (via transcript)
-            commitment = transcript.get_group_element(bonk::StandardArithmetization::ENUM_TO_COMM[i]);
-        }
-        batched_commitment_unshifted += commitment * rhos[i];
+    size_t commitment_idx = 0;
+    for (auto& commitment : commitments.get_unshifted()) {
+        batched_commitment_unshifted += commitment * rhos[commitment_idx];
+        ++commitment_idx;
     }
 
     // Construct batched commitment for to-be-shifted polynomials
-    batched_commitment_to_be_shifted = transcript.get_group_element("Z_PERM") * rhos[NUM_UNSHIFTED];
-
-    // Reconstruct the Gemini Proof from the transcript
-    auto gemini_proof = Gemini::reconstruct_proof_from_transcript(&transcript, key->log_circuit_size);
+    for (auto& commitment : commitments.get_to_be_shifted()) {
+        batched_commitment_to_be_shifted += commitment * rhos[commitment_idx];
+        ++commitment_idx;
+    }
 
     // Produce a Gemini claim consisting of:
     // - d+1 commitments [Fold_{r}^(0)], [Fold_{-r}^(0)], and [Fold^(l)], l = 1:d-1
     // - d+1 evaluations a_0_pos, and a_l, l = 0:d-1
-    auto gemini_claim = Gemini::reduce_verify(opening_point,
+    auto gemini_claim = Gemini::reduce_verify(multivariate_challenge,
                                               batched_evaluation,
                                               batched_commitment_unshifted,
                                               batched_commitment_to_be_shifted,
-                                              gemini_proof,
-                                              &transcript);
-
-    // Reconstruct the Shplonk Proof (commitment [Q]) from the transcript
-    auto shplonk_proof = transcript.get_group_element("Q");
+                                              transcript);
 
     // Produce a Shplonk claim: commitment [Q] - [Q_z], evaluation zero (at random challenge z)
-    auto shplonk_claim = Shplonk::reduce_verify(gemini_claim, shplonk_proof, &transcript);
-
-    // Reconstruct the KZG Proof (commitment [W]_1) from the transcript
-    auto kzg_proof = transcript.get_group_element("W");
+    auto shplonk_claim = Shplonk::reduce_verify(gemini_claim, transcript);
 
     // Aggregate inputs [Q] - [Q_z] and [W] into an 'accumulator' (can perform pairing check on result)
-    auto kzg_claim = KZG::reduce_verify(shplonk_claim, kzg_proof);
+    auto kzg_claim = KZG::reduce_verify(shplonk_claim, transcript);
 
-    // Do final pairing check
-    bool pairing_result = kzg_claim.verify(kate_verification_key);
-
-    bool result = sumcheck_result && pairing_result;
-
-    return result;
+    // Return result of final pairing check
+    return kzg_claim.verify(kate_verification_key);
 }
 
-template class Verifier<honk::standard_verifier_settings>;
+template class StandardVerifier_<honk::flavor::Standard>;
 
-} // namespace honk
+} // namespace proof_system::honk

@@ -1,5 +1,6 @@
 #include "prover.hpp"
 #include "../public_inputs/public_inputs.hpp"
+#include "barretenberg/plonk/proof_system/types/prover_settings.hpp"
 #include "barretenberg/polynomials/polynomial.hpp"
 #include <chrono>
 #include "barretenberg/ecc/curves/bn254/scalar_multiplication/scalar_multiplication.hpp"
@@ -8,7 +9,7 @@
 
 using namespace barretenberg;
 
-namespace plonk {
+namespace proof_system::plonk {
 
 /**
  * Create ProverBase from proving key, witness and manifest.
@@ -79,7 +80,7 @@ template <typename settings> void ProverBase<settings>::compute_wire_commitments
         barretenberg::fr* coefficients = key->polynomial_store.get(wire_tag).get_coefficients();
 
         // This automatically saves the computed point to the transcript
-        fr domain_size_flag = i > 2 ? work_queue::MSMType::MONOMIAL_N : work_queue::MSMType::MONOMIAL_N_PLUS_ONE;
+        fr domain_size_flag = i > 2 ? key->circuit_size : (key->circuit_size + 1);
         commitment_scheme->commit(coefficients, commit_tag, domain_size_flag, queue);
     }
 
@@ -137,7 +138,7 @@ template <typename settings> void ProverBase<settings>::compute_quotient_commitm
         std::string quotient_tag = "T_" + std::to_string(i + 1);
         // Set flag that determines domain size (currently n or n+1) in pippenger (see process_queue()).
         // Note: After blinding, all t_i have size n+1 representation (degree n) except t_4 in Turbo/Ultra.
-        fr domain_size_flag = i > 2 ? work_queue::MSMType::MONOMIAL_N : work_queue::MSMType::MONOMIAL_N_PLUS_ONE;
+        fr domain_size_flag = i > 2 ? key->circuit_size : (key->circuit_size + 1);
         commitment_scheme->commit(coefficients, quotient_tag, domain_size_flag, queue);
     }
 }
@@ -311,7 +312,7 @@ template <typename settings> void ProverBase<settings>::execute_second_round()
             .work_type = work_queue::WorkType::SCALAR_MULTIPLICATION,
             .mul_scalars = key->polynomial_store.get(wire_tag).get_coefficients(),
             .tag = "W_4",
-            .constant = work_queue::MSMType::MONOMIAL_N_PLUS_ONE,
+            .constant = key->circuit_size + 1,
             .index = 0,
         });
     }
@@ -417,7 +418,6 @@ template <typename settings> void ProverBase<settings>::execute_fourth_round()
     for (auto& widget : transition_widgets) {
         alpha_base = widget->compute_quotient_contribution(alpha_base, transcript);
     }
-
 #ifdef DEBUG_TIMING
     start = std::chrono::steady_clock::now();
 #endif
@@ -469,7 +469,7 @@ template <typename settings> void ProverBase<settings>::execute_fourth_round()
     diff = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     std::cerr << "compute quotient commitment: " << diff.count() << "ms" << std::endl;
 #endif
-} // namespace plonk
+} // namespace proof_system::plonk
 
 template <typename settings> void ProverBase<settings>::execute_fifth_round()
 {
@@ -640,5 +640,6 @@ template class ProverBase<standard_settings>;
 template class ProverBase<turbo_settings>;
 template class ProverBase<ultra_settings>;
 template class ProverBase<ultra_to_standard_settings>;
+template class ProverBase<ultra_with_keccak_settings>;
 
-} // namespace plonk
+} // namespace proof_system::plonk

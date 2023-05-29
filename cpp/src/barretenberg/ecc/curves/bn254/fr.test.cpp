@@ -1,7 +1,14 @@
 #include "fr.hpp"
+#include "barretenberg/serialize/test_helper.hpp"
 #include <gtest/gtest.h>
 
 using namespace barretenberg;
+
+TEST(fr, msgpack)
+{
+    auto [actual, expected] = msgpack_roundtrip(barretenberg::fr{ 1ull, 2ull, 3ull, 4ull });
+    EXPECT_EQ(actual, expected);
+}
 
 TEST(fr, eq)
 {
@@ -84,6 +91,35 @@ TEST(fr, sub)
     fr result;
     result = a - b;
     EXPECT_EQ((result == expected), true);
+}
+
+TEST(fr, plus_equals)
+{
+    fr a{ 0x5def, 0x00, 0x00, 0x00 };
+    fr a_copy = a;
+    a += 2;
+    fr expected = a_copy + 2;
+    EXPECT_EQ((a == expected), true);
+
+    a += 3;
+    expected = a_copy + 5;
+    EXPECT_EQ((a == expected), true);
+}
+
+TEST(fr, prefix_increment)
+{
+    fr a{ 0x5def, 0x00, 0x00, 0x00 };
+    fr b = ++a;
+    EXPECT_EQ(b, a);
+}
+
+TEST(fr, postfix_increment)
+{
+    fr a{ 0x5def, 0x00, 0x00, 0x00 };
+    fr a_old = a;
+    fr b = a++;
+    EXPECT_EQ(b, a_old);
+    EXPECT_EQ(a, a_old + 1);
 }
 
 TEST(fr, to_montgomery_form)

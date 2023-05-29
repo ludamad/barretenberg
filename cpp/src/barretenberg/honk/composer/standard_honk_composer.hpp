@@ -1,12 +1,12 @@
 #pragma once
 
 #include "composer_helper/standard_honk_composer_helper.hpp"
-#include "barretenberg/honk/circuit_constructors/standard_circuit_constructor.hpp"
+#include "barretenberg/proof_system/circuit_constructors/standard_circuit_constructor.hpp"
 #include "barretenberg/srs/reference_string/file_reference_string.hpp"
-#include "barretenberg/transcript/manifest.hpp"
-#include "barretenberg/proof_system/flavor/flavor.hpp"
+#include "barretenberg/proof_system/types/merkle_hash_type.hpp"
+#include "barretenberg/proof_system/types/pedersen_commitment_type.hpp"
 
-namespace honk {
+namespace proof_system::honk {
 /**
  * @brief Standard Honk Composer has everything required to construct a prover and verifier, just as the legacy classes.
  *
@@ -15,20 +15,28 @@ namespace honk {
  */
 class StandardHonkComposer {
   public:
-    static constexpr plonk::ComposerType type = plonk::ComposerType::STANDARD_HONK;
+    // TODO(#426): This doesn't belong here
+    static constexpr merkle::HashType merkle_hash_type = merkle::HashType::LOOKUP_PEDERSEN;
+    static constexpr pedersen::CommitmentType commitment_type = pedersen::CommitmentType::FIXED_BASE_PEDERSEN;
+
+    using Flavor = flavor::Standard;
+    using CircuitConstructor = StandardCircuitConstructor;
+    using ProvingKey = typename Flavor::ProvingKey;
+    using VerificationKey = typename Flavor::VerificationKey;
+    static constexpr ComposerType type = ComposerType::STANDARD_HONK; // TODO(Cody): Get rid of this.
 
     static constexpr size_t UINT_LOG2_BASE = 2;
     // An instantiation of the circuit constructor that only depends on arithmetization, not  on the proof system
-    StandardCircuitConstructor circuit_constructor;
+    CircuitConstructor circuit_constructor;
     // Composer helper contains all proof-related material that is separate from circuit creation such as:
     // 1) Proving and verification keys
     // 2) CRS
     // 3) Converting variables to witness vectors/polynomials
-    StandardHonkComposerHelper<StandardCircuitConstructor> composer_helper;
+    StandardHonkComposerHelper composer_helper;
 
     // Leaving it in for now just in case
     bool contains_recursive_proof = false;
-    static constexpr size_t program_width = STANDARD_HONK_WIDTH;
+    static constexpr size_t NUM_WIRES = CircuitConstructor::NUM_WIRES;
 
     /**Standard methods*/
 
@@ -39,17 +47,17 @@ class StandardHonkComposer {
 
     StandardHonkComposer(std::string const& crs_path, const size_t size_hint = 0)
         : StandardHonkComposer(
-              std::unique_ptr<bonk::ReferenceStringFactory>(new bonk::FileReferenceStringFactory(crs_path)),
+              std::unique_ptr<ReferenceStringFactory>(new proof_system::FileReferenceStringFactory(crs_path)),
               size_hint){};
 
-    StandardHonkComposer(std::shared_ptr<bonk::ReferenceStringFactory> const& crs_factory, const size_t size_hint = 0)
+    StandardHonkComposer(std::shared_ptr<ReferenceStringFactory> const& crs_factory, const size_t size_hint = 0)
         : circuit_constructor(size_hint)
         , composer_helper(crs_factory)
         , num_gates(circuit_constructor.num_gates)
         , variables(circuit_constructor.variables)
 
     {}
-    StandardHonkComposer(std::unique_ptr<bonk::ReferenceStringFactory>&& crs_factory, const size_t size_hint = 0)
+    StandardHonkComposer(std::unique_ptr<ReferenceStringFactory>&& crs_factory, const size_t size_hint = 0)
         : circuit_constructor(size_hint)
         , composer_helper(std::move(crs_factory))
         , num_gates(circuit_constructor.num_gates)
@@ -57,8 +65,8 @@ class StandardHonkComposer {
 
     {}
 
-    StandardHonkComposer(std::shared_ptr<bonk::proving_key> const& p_key,
-                         std::shared_ptr<bonk::verification_key> const& v_key,
+    StandardHonkComposer(std::shared_ptr<ProvingKey> const& p_key,
+                         std::shared_ptr<VerificationKey> const& v_key,
                          size_t size_hint = 0)
         : circuit_constructor(size_hint)
         , composer_helper(p_key, v_key)
@@ -101,18 +109,6 @@ class StandardHonkComposer {
     }
     void create_big_mul_gate(const mul_quad& in) { circuit_constructor.create_big_mul_gate(in); }
     void create_balanced_add_gate(const add_quad& in) { circuit_constructor.create_balanced_add_gate(in); }
-    void create_fixed_group_add_gate(const fixed_group_add_quad& in)
-    {
-        circuit_constructor.create_fixed_group_add_gate(in);
-    }
-    void create_fixed_group_add_gate_with_init(const fixed_group_add_quad& in, const fixed_group_init_quad& init)
-    {
-        circuit_constructor.create_fixed_group_add_gate_with_init(in, init);
-    }
-    void create_fixed_group_add_gate_final(const add_quad& in)
-    {
-        circuit_constructor.create_fixed_group_add_gate_final(in);
-    }
 
     void fix_witness(const uint32_t witness_index, const barretenberg::fr& witness_value)
     {
@@ -173,12 +169,12 @@ class StandardHonkComposer {
 
     /**Proof and verification-related methods*/
 
-    std::shared_ptr<bonk::proving_key> compute_proving_key()
+    std::shared_ptr<ProvingKey> compute_proving_key()
     {
         return composer_helper.compute_proving_key(circuit_constructor);
     }
 
-    std::shared_ptr<bonk::verification_key> compute_verification_key()
+    std::shared_ptr<VerificationKey> compute_verification_key()
     {
         return composer_helper.compute_verification_key(circuit_constructor);
     }
@@ -188,7 +184,7 @@ class StandardHonkComposer {
     void compute_witness() { composer_helper.compute_witness(circuit_constructor); };
 
     StandardVerifier create_verifier() { return composer_helper.create_verifier(circuit_constructor); }
-    StandardProver create_prover() { return composer_helper.create_prover<honk::StandardHonk>(circuit_constructor); };
+    StandardProver create_prover() { return composer_helper.create_prover(circuit_constructor); };
 
     size_t& num_gates;
     std::vector<barretenberg::fr>& variables;
@@ -196,4 +192,4 @@ class StandardHonkComposer {
     const std::string& err() const { return circuit_constructor.err(); };
     void failure(std::string msg) { circuit_constructor.failure(msg); }
 };
-} // namespace honk
+} // namespace proof_system::honk

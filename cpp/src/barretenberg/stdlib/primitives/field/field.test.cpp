@@ -1,14 +1,17 @@
 #include "../bool/bool.hpp"
 #include "field.hpp"
+#include "array.hpp"
 #include "barretenberg/plonk/proof_system/constants.hpp"
 #include <gtest/gtest.h>
+#include <utility>
 #include "barretenberg/honk/composer/standard_honk_composer.hpp"
 #include "barretenberg/plonk/composer/standard_composer.hpp"
 #include "barretenberg/plonk/composer/ultra_composer.hpp"
 #include "barretenberg/plonk/composer/turbo_composer.hpp"
 #include "barretenberg/numeric/random/engine.hpp"
+#include "barretenberg/common/streams.hpp"
 
-using namespace bonk;
+using namespace proof_system;
 
 namespace test_stdlib_field {
 
@@ -19,7 +22,7 @@ auto& engine = numeric::random::get_debug_engine();
 template <class T> void ignore_unused(T&) {} // use to ignore unused variables in lambdas
 
 using namespace barretenberg;
-using namespace plonk;
+using namespace proof_system::plonk;
 
 template <typename Composer> class stdlib_field : public testing::Test {
     typedef stdlib::bool_t<Composer> bool_ct;
@@ -192,8 +195,9 @@ template <typename Composer> class stdlib_field : public testing::Test {
         uint64_t expected = fidget(composer);
         auto prover = composer.create_prover();
 
-        if constexpr (Composer::type == plonk::ComposerType::STANDARD_HONK) {
-            EXPECT_EQ(prover.wire_polynomials[2][20], fr(expected));
+        // TODO(Cody): This is a hack and the test should be rewritten.
+        if constexpr (Composer::type == ComposerType::STANDARD_HONK) {
+            EXPECT_EQ(prover.key->w_o[20], fr(expected));
         } else {
             EXPECT_EQ(prover.key->polynomial_store.get("w_3_lagrange")[18], fr(expected));
         }
@@ -241,6 +245,44 @@ template <typename Composer> class stdlib_field : public testing::Test {
         EXPECT_EQ(result, true);
     }
 
+    static void test_postfix_increment()
+    {
+        Composer composer = Composer();
+
+        field_ct a = witness_ct(&composer, 10);
+
+        field_ct b = a++;
+
+        EXPECT_EQ(b.get_value(), 10);
+        EXPECT_EQ(a.get_value(), 11);
+
+        auto prover = composer.create_prover();
+
+        auto verifier = composer.create_verifier();
+        auto proof = prover.construct_proof();
+        bool result = verifier.verify_proof(proof);
+        EXPECT_EQ(result, true);
+    }
+
+    static void test_prefix_increment()
+    {
+        Composer composer = Composer();
+
+        field_ct a = witness_ct(&composer, 10);
+
+        field_ct b = ++a;
+
+        EXPECT_EQ(b.get_value(), 11);
+        EXPECT_EQ(a.get_value(), 11);
+
+        auto prover = composer.create_prover();
+
+        auto verifier = composer.create_verifier();
+        auto proof = prover.construct_proof();
+        bool result = verifier.verify_proof(proof);
+        EXPECT_EQ(result, true);
+    }
+
     static void test_field_fibbonaci()
     {
         Composer composer = Composer();
@@ -249,8 +291,8 @@ template <typename Composer> class stdlib_field : public testing::Test {
 
         auto prover = composer.create_prover();
 
-        if constexpr (Composer::type == plonk::ComposerType::STANDARD_HONK) {
-            EXPECT_EQ(prover.wire_polynomials[2][19], fr(4181));
+        if constexpr (Composer::type == ComposerType::STANDARD_HONK) {
+            EXPECT_EQ(prover.key->w_o[19], fr(4181));
         } else {
             EXPECT_EQ(prover.key->polynomial_store.get("w_3_lagrange")[17], fr(4181));
         }
@@ -579,7 +621,8 @@ template <typename Composer> class stdlib_field : public testing::Test {
 
         const uint256_t expected0 = uint256_t(a_) & ((uint256_t(1) << uint64_t(lsb)) - 1);
         const uint256_t expected1 = (uint256_t(a_) >> lsb) & ((uint256_t(1) << (uint64_t(msb - lsb) + 1)) - 1);
-        const uint256_t expected2 = (uint256_t(a_) >> (msb + 1)) & ((uint256_t(1) << (uint64_t(252 - msb) - 1)) - 1);
+        const uint256_t expected2 =
+            (uint256_t(a_) >> uint64_t(msb + 1)) & ((uint256_t(1) << (uint64_t(252 - msb) - 1)) - 1);
 
         EXPECT_EQ(slice[0].get_value(), fr(expected0));
         EXPECT_EQ(slice[1].get_value(), fr(expected1));
@@ -908,6 +951,77 @@ template <typename Composer> class stdlib_field : public testing::Test {
         EXPECT_EQ(composer.failed(), true);
         EXPECT_EQ(composer.err(), "field_t::pow exponent accumulator incorrect");
     };
+
+    static void test_copy_as_new_witness()
+    {
+        Composer composer = Composer();
+
+        barretenberg::fr value(engine.get_random_uint256());
+        field_ct value_ct = witness_ct(&composer, value);
+
+        field_ct first_copy = witness_ct(&composer, value_ct.get_value());
+        field_ct second_copy = field_ct::copy_as_new_witness(composer, value_ct);
+
+        EXPECT_EQ(value_ct.get_value(), value);
+        EXPECT_EQ(first_copy.get_value(), value);
+        EXPECT_EQ(second_copy.get_value(), value);
+        EXPECT_EQ(value_ct.get_witness_index() + 1, first_copy.get_witness_index());
+        EXPECT_EQ(value_ct.get_witness_index() + 2, second_copy.get_witness_index());
+
+        auto prover = composer.create_prover();
+        auto verifier = composer.create_verifier();
+        auto proof = prover.construct_proof();
+        info("composer gates = ", composer.get_num_gates());
+        bool proof_result = verifier.verify_proof(proof);
+        EXPECT_EQ(proof_result, true);
+    }
+
+    static void test_ranged_less_than()
+    {
+        Composer composer = Composer();
+
+        for (size_t i = 0; i < 10; ++i) {
+            int a_val = static_cast<int>(engine.get_random_uint8());
+            int b_val = 0;
+            switch (i) {
+            case 0: {
+                b_val = a_val;
+                break;
+            }
+            case 1: {
+                b_val = a_val + 1;
+                break;
+            }
+            case 2: {
+                b_val = a_val - 1;
+                break;
+            }
+            default: {
+                b_val = static_cast<int>(engine.get_random_uint8());
+                break;
+            }
+            }
+            if (b_val < 0) {
+                b_val = 255;
+            }
+            if (b_val > 255) {
+                b_val = 0;
+            }
+            field_ct a = witness_ct(&composer, static_cast<uint64_t>(a_val));
+            field_ct b = witness_ct(&composer, static_cast<uint64_t>(b_val));
+            a.create_range_constraint(8);
+            b.create_range_constraint(8);
+            bool_ct result = a.template ranged_less_than<8>(b);
+            bool expected = a_val < b_val;
+
+            EXPECT_EQ(result.get_value(), expected);
+        }
+        auto prover = composer.create_prover();
+        auto verifier = composer.create_verifier();
+        auto proof = prover.construct_proof();
+        bool proof_result = verifier.verify_proof(proof);
+        EXPECT_EQ(proof_result, true);
+    }
 };
 
 typedef testing::Types<plonk::UltraComposer, plonk::TurboComposer, plonk::StandardComposer, honk::StandardHonkComposer>
@@ -930,6 +1044,14 @@ TYPED_TEST(stdlib_field, test_add_mul_with_constants)
 TYPED_TEST(stdlib_field, test_div)
 {
     TestFixture::test_div();
+}
+TYPED_TEST(stdlib_field, test_postfix_increment)
+{
+    TestFixture::test_postfix_increment();
+}
+TYPED_TEST(stdlib_field, test_prefix_increment)
+{
+    TestFixture::test_prefix_increment();
 }
 TYPED_TEST(stdlib_field, test_field_fibbonaci)
 {
@@ -1023,4 +1145,13 @@ TYPED_TEST(stdlib_field, test_pow_exponent_out_of_range)
 {
     TestFixture::test_pow_exponent_out_of_range();
 }
+TYPED_TEST(stdlib_field, test_copy_as_new_witness)
+{
+    TestFixture::test_copy_as_new_witness();
+}
+TYPED_TEST(stdlib_field, test_ranged_less_than)
+{
+    TestFixture::test_ranged_less_than();
+}
+
 } // namespace test_stdlib_field

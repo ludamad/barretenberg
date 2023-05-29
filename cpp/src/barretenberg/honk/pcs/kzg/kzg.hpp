@@ -2,11 +2,12 @@
 
 #include "../claim.hpp"
 #include "barretenberg/polynomials/polynomial.hpp"
+#include "barretenberg/honk/transcript/transcript.hpp"
 
 #include <memory>
 #include <utility>
 
-namespace honk::pcs::kzg {
+namespace proof_system::honk::pcs::kzg {
 /**
  * @brief A transformed polynomial commitment opening claim of the form (P₀, P₁) ∈ 𝔾₁
  * which should satisfy e(P₀, [1]₂) ⋅ e(P₁, [x]₂)=1.
@@ -17,6 +18,7 @@ namespace honk::pcs::kzg {
 template <typename Params> class BilinearAccumulator {
     using VK = typename Params::VK;
     using Fr = typename Params::Fr;
+    using CommitmentAffine = typename Params::C;
     using Commitment = typename Params::Commitment;
 
   public:
@@ -29,7 +31,7 @@ template <typename Params> class BilinearAccumulator {
      */
     BilinearAccumulator(const OpeningClaim<Params>& claim, const Commitment& proof)
         : lhs(claim.commitment - (Commitment::one() * claim.opening_pair.evaluation) +
-              (proof * claim.opening_pair.query))
+              (proof * claim.opening_pair.challenge))
         , rhs(-proof)
     {}
 
@@ -43,7 +45,7 @@ template <typename Params> class BilinearAccumulator {
 
     bool operator==(const BilinearAccumulator& other) const = default;
 
-    Commitment lhs, rhs;
+    CommitmentAffine lhs, rhs;
 };
 
 template <typename Params> class UnivariateOpeningScheme {
@@ -58,23 +60,20 @@ template <typename Params> class UnivariateOpeningScheme {
     using Accumulator = BilinearAccumulator<Params>;
 
     /**
-     * @brief Compute KZG opening proof (commitment) and add it to transcript
+     * @brief Compute KZG opening proof polynomial
      *
-     * @param ck CommitmentKey
      * @param opening_pair OpeningPair = {r, v = polynomial(r)}
      * @param polynomial the witness polynomial being opened
+     * @return KZG quotient polynomial of the form (p(X) - v) / (X - r)
      */
-    static void reduce_prove(std::shared_ptr<CK> ck,
-                             const OpeningPair<Params>& opening_pair,
-                             const Polynomial& polynomial,
-                             const auto& transcript)
+    static Polynomial compute_opening_proof_polynomial(const OpeningPair<Params>& opening_pair,
+                                                       const Polynomial& polynomial)
     {
         Polynomial quotient(polynomial);
         quotient[0] -= opening_pair.evaluation;
-        quotient.factor_roots(opening_pair.query);
-        Commitment proof = ck->commit(quotient);
+        quotient.factor_roots(opening_pair.challenge);
 
-        transcript->add_element("W", static_cast<CommitmentAffine>(proof).to_buffer());
+        return quotient;
     };
 
     /**
@@ -85,9 +84,10 @@ template <typename Params> class UnivariateOpeningScheme {
      * @param proof π, a commitment to Q(X) = ( P(X) - v )/( X - r)
      * @return Accumulator {C − v⋅[1]₁ + r⋅π, −π}
      */
-    static Accumulator reduce_verify(const OpeningClaim<Params>& claim, const Commitment& proof)
+    static Accumulator reduce_verify(const OpeningClaim<Params>& claim, VerifierTranscript<Fr>& verifier_transcript)
     {
-        return Accumulator(claim, proof);
+        auto quotient_commitment = verifier_transcript.template receive_from_prover<CommitmentAffine>("KZG:W");
+        return Accumulator(claim, quotient_commitment);
     };
 };
-} // namespace honk::pcs::kzg
+} // namespace proof_system::honk::pcs::kzg

@@ -1,15 +1,17 @@
 #include "./plookup.hpp"
 #include "barretenberg/plonk/composer/ultra_composer.hpp"
-#include "barretenberg/plonk/composer/plookup_tables/plookup_tables.hpp"
-#include "barretenberg/plonk/composer/plookup_tables/types.hpp"
+#include "barretenberg/proof_system/plookup_tables/plookup_tables.hpp"
+#include "barretenberg/proof_system/plookup_tables/types.hpp"
 
-namespace plonk {
+namespace proof_system::plonk {
 class UltraComposer;
-} // namespace plonk
+} // namespace proof_system::plonk
 
-namespace plonk {
+namespace proof_system::plonk {
 namespace stdlib {
 
+using plookup::ColumnIdx;
+using plookup::MultiTableId;
 using namespace barretenberg;
 
 template <typename Composer>
@@ -78,7 +80,7 @@ field_t<Composer> plookup_<Composer>::read_from_2_to_1_table(const MultiTableId 
 {
     const auto lookup = get_lookup_accumulators(id, key_a, key_b, true);
 
-    return lookup[ColumnIdx::C2][0];
+    return lookup[ColumnIdx::C3][0];
 }
 
 template <typename Composer>
@@ -91,4 +93,4 @@ field_t<Composer> plookup_<Composer>::read_from_1_to_2_table(const MultiTableId 
 
 template class plookup_<plonk::UltraComposer>;
 } // namespace stdlib
-} // namespace plonk
+} // namespace proof_system::plonk

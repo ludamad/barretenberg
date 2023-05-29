@@ -17,7 +17,7 @@
  * The challenges are ρ (batching) and r (random evaluation).
  *
  */
-namespace honk::pcs::shplonk {
+namespace proof_system::honk::pcs::shplonk {
 
 /**
  * @brief Single commitment to  Q(X) = ∑ₖ ( Bₖ(X) − Tₖ(X) ) / zₖ(X)
@@ -39,8 +39,8 @@ template <typename Params> using OutputWitness = barretenberg::Polynomial<typena
  * @tparam Params CommitmentScheme parameters
  */
 template <typename Params> struct ProverOutput {
-    OpeningPair<Params> opening_pair; // single opening pair (query, G(query) = 0)
+    OpeningPair<Params> opening_pair; // single opening pair (challenge, evaluation)
     OutputWitness<Params> witness;    // single polynomial G(X)
 };
 
-} // namespace honk::pcs::shplonk
+} // namespace proof_system::honk::pcs::shplonk

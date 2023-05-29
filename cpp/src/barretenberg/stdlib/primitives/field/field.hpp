@@ -3,10 +3,10 @@
 #include "../composers/composers_fwd.hpp"
 #include "../witness/witness.hpp"
 #include "barretenberg/honk/composer/standard_honk_composer.hpp"
-#include "barretenberg/honk/composer/standard_plonk_composer.hpp"
+#include "barretenberg/plonk/composer/splitting_tmp/standard_plonk_composer.hpp"
 #include "barretenberg/common/assert.hpp"
 
-namespace plonk {
+namespace proof_system::plonk {
 namespace stdlib {
 
 template <typename ComposerContext> class bool_t;
@@ -104,6 +104,13 @@ template <typename ComposerContext> class field_t {
         return *this;
     }
 
+    static field_t copy_as_new_witness(ComposerContext& context, field_t const& other)
+    {
+        auto result = field_t<ComposerContext>(witness_t<ComposerContext>(&context, other.get_value()));
+        result.assert_equal(other, "field_t::copy_as_new_witness, assert_equal");
+        return result;
+    }
+
     field_t operator+(const field_t& other) const;
     field_t operator-(const field_t& other) const;
     field_t operator*(const field_t& other) const;
@@ -135,6 +142,21 @@ template <typename ComposerContext> class field_t {
         *this = *this / other;
         return *this;
     }
+
+    // Prefix increment (++x)
+    field_t& operator++()
+    {
+        *this = *this + 1;
+        return *this;
+    };
+
+    // Postfix increment (x++)
+    field_t operator++(int)
+    {
+        field_t this_before_operation = field_t(*this);
+        *this = *this + 1;
+        return this_before_operation;
+    };
 
     field_t invert() const { return (field_t(1) / field_t(*this)).normalize(); }
 
@@ -239,9 +261,10 @@ template <typename ComposerContext> class field_t {
     void set_public() const { context->set_public_input(normalize().witness_index); }
 
     /**
-     * Create a witness form a constant. This way the value of the witness is fixed and public.
-     **/
-    void convert_constant_to_witness(ComposerContext* ctx)
+     * Create a witness form a constant. This way the value of the witness is fixed and public (public, because the
+     * value becomes hard-coded as an element of the q_c selector vector).
+     */
+    void convert_constant_to_fixed_witness(ComposerContext* ctx)
     {
         ASSERT(witness_index == IS_CONSTANT);
         context = ctx;
@@ -273,6 +296,41 @@ template <typename ComposerContext> class field_t {
             [](ComposerContext* ctx, uint64_t j, uint256_t val) {
                 return witness_t<ComposerContext>(ctx, val.get_bit(j));
             }) const;
+
+    /**
+     * @brief Return (a < b) as bool circuit type.
+     *        This method *assumes* that both a and b are < 2^{input_bits} - 1
+     *        i.e. it is not checked here, we assume this has been done previously
+     *
+     * @tparam Composer
+     * @tparam input_bits
+     * @param a
+     * @param b
+     * @return bool_t<Composer>
+     */
+    template <size_t num_bits> bool_t<ComposerContext> ranged_less_than(const field_t<ComposerContext>& other) const
+    {
+        const auto& a = (*this);
+        const auto& b = other;
+        auto* ctx = a.context ? a.context : b.context;
+        if (a.is_constant() && b.is_constant()) {
+            return uint256_t(a.get_value()) < uint256_t(b.get_value());
+        }
+
+        // a < b
+        // both a and b are < K where K = 2^{input_bits} - 1
+        // if a < b, this implies b - a - 1 < K
+        // if a >= b, this implies b - a + K - 1 < K
+        // i.e. (b - a - 1) * q + (b - a + K - 1) * (1 - q) = r < K
+        // q.(b - a - b + a) + b - a + K - 1 - (K - 1).q - q = r
+        // b - a + (K - 1) - (K).q = r
+        uint256_t range_constant = (uint256_t(1) << num_bits);
+        bool predicate_witness = uint256_t(a.get_value()) < uint256_t(b.get_value());
+        bool_t<ComposerContext> predicate(witness_t<ComposerContext>(ctx, predicate_witness));
+        field_t predicate_valid = b.add_two(-(a) + range_constant - 1, -field_t(predicate) * range_constant);
+        predicate_valid.create_range_constraint(num_bits);
+        return predicate;
+    }
 
     mutable ComposerContext* context = nullptr;
 
@@ -366,4 +424,4 @@ template <typename ComposerContext> inline std::ostream& operator<<(std::ostream
 EXTERN_STDLIB_TYPE(field_t);
 
 } // namespace stdlib
-} // namespace plonk
+} // namespace proof_system::plonk

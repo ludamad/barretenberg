@@ -1,7 +1,7 @@
 #include "sha256_plookup.hpp"
 
-#include "barretenberg/plonk/composer/plookup_tables/plookup_tables.hpp"
-#include "barretenberg/plonk/composer/plookup_tables/sha256.hpp"
+#include "barretenberg/proof_system/plookup_tables/plookup_tables.hpp"
+#include "barretenberg/proof_system/plookup_tables/sha256.hpp"
 #include "barretenberg/plonk/composer/ultra_composer.hpp"
 #include "barretenberg/stdlib/primitives/bit_array/bit_array.hpp"
 #include "barretenberg/stdlib/primitives/field/field.hpp"
@@ -10,9 +10,11 @@
 
 using namespace barretenberg;
 
-namespace plonk {
+namespace proof_system::plonk {
 namespace stdlib {
 namespace sha256_plookup {
+
+using namespace plookup;
 
 namespace internal {
 
@@ -361,4 +363,4 @@ packed_byte_array<plonk::UltraComposer> sha256(const packed_byte_array<plonk::Ul
 
 } // namespace sha256_plookup
 } // namespace stdlib
-} // namespace plonk
+} // namespace proof_system::plonk

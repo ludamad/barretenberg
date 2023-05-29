@@ -6,7 +6,7 @@
 #include "barretenberg/common/serialize.hpp"
 #include "barretenberg/common/assert.hpp"
 
-namespace honk::sumcheck {
+namespace proof_system::honk::sumcheck {
 
 template <class Fr, size_t view_length> class UnivariateView;
 
@@ -211,6 +211,18 @@ template <class Fr, size_t _length> class Univariate {
     }
 };
 
+template <typename B, class Fr, size_t _length> inline void read(B& it, Univariate<Fr, _length>& univariate)
+{
+    using serialize::read;
+    read(it, univariate.evaluations);
+}
+
+template <typename B, class Fr, size_t _length> inline void write(B& it, Univariate<Fr, _length> const& univariate)
+{
+    using serialize::write;
+    write(it, univariate.evaluations);
+}
+
 template <class Fr, size_t view_length> class UnivariateView {
   public:
     std::span<const Fr, view_length> evaluations;
@@ -279,6 +291,13 @@ template <class Fr, size_t view_length> class UnivariateView {
         return res;
     }
 
+    Univariate<Fr, view_length> operator-(const Univariate<Fr, view_length>& other) const
+    {
+        Univariate<Fr, view_length> res(*this);
+        res -= other;
+        return res;
+    }
+
     // Output is immediately parsable as a list of integers by Python.
     friend std::ostream& operator<<(std::ostream& os, const UnivariateView& u)
     {
@@ -337,4 +356,4 @@ template <typename T, typename U, std::size_t N> std::array<T, N> array_to_array
     return array_to_array_aux<T, U, N>(elements, std::make_index_sequence<N>());
 };
 
-} // namespace honk::sumcheck
+} // namespace proof_system::honk::sumcheck

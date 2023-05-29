@@ -4,7 +4,7 @@
 
 #include "../field/field.hpp"
 
-namespace plonk {
+namespace proof_system::plonk {
 namespace stdlib {
 
 template <typename Composer> struct point {
@@ -46,6 +46,21 @@ template <typename Composer> struct point {
     };
 
     bool_t<Composer> operator==(const point& other) const { return (this->x == other.x) && (this->y == other.y); }
+
+    point<Composer> operator+(const point& other) const
+    {
+        const field_t<Composer>& x1 = this->x;
+        const field_t<Composer>& y1 = this->y;
+
+        const field_t<Composer>& x2 = other.x;
+        const field_t<Composer>& y2 = other.y;
+
+        const field_t<Composer> lambda = (y2 - y1) / (x2 - x1);
+        const field_t<Composer> x3 = lambda * lambda - x2 - x1;
+        const field_t<Composer> y3 = lambda * (x1 - x3) - y1;
+
+        return { x3, y3 };
+    }
 };
 
 template <typename Composer, typename E>
@@ -69,4 +84,4 @@ template <typename Composer> std::ostream& operator<<(std::ostream& os, point<Co
 }
 
 } // namespace stdlib
-} // namespace plonk
+} // namespace proof_system::plonk

@@ -17,7 +17,7 @@
 #include "../widgets/random_widgets/plookup_widget.hpp"
 #include "./prover_settings.hpp"
 
-namespace plonk {
+namespace proof_system::plonk {
 
 class standard_verifier_settings : public standard_settings {
   public:
@@ -120,7 +120,6 @@ class ultra_verifier_settings : public ultra_settings {
     typedef barretenberg::g1 g1;
     typedef transcript::StandardTranscript Transcript;
     typedef VerifierPlookupArithmeticWidget<fr, g1::affine_element, Transcript, ultra_settings> PlookupArithmeticWidget;
-    typedef VerifierUltraFixedBaseWidget<fr, g1::affine_element, Transcript, ultra_settings> UltraFixedBaseWidget;
     typedef VerifierGenPermSortWidget<fr, g1::affine_element, Transcript, ultra_settings> GenPermSortWidget;
     typedef VerifierTurboLogicWidget<fr, g1::affine_element, Transcript, ultra_settings> TurboLogicWidget;
     typedef VerifierPermutationWidget<fr, g1::affine_element, Transcript> PermutationWidget;
@@ -141,8 +140,6 @@ class ultra_verifier_settings : public ultra_settings {
         updated_alpha = PlookupWidget::append_scalar_multiplication_inputs(key, updated_alpha, transcript, scalars);
         updated_alpha =
             PlookupArithmeticWidget::append_scalar_multiplication_inputs(key, updated_alpha, transcript, scalars);
-        updated_alpha =
-            UltraFixedBaseWidget::append_scalar_multiplication_inputs(key, updated_alpha, transcript, scalars);
         updated_alpha = GenPermSortWidget::append_scalar_multiplication_inputs(key, updated_alpha, transcript, scalars);
         updated_alpha = EllipticWidget::append_scalar_multiplication_inputs(key, updated_alpha, transcript, scalars);
         updated_alpha =
@@ -162,8 +159,6 @@ class ultra_verifier_settings : public ultra_settings {
             key, updated_alpha_base, transcript, quotient_numerator_eval);
         updated_alpha_base = PlookupArithmeticWidget::compute_quotient_evaluation_contribution(
             key, updated_alpha_base, transcript, quotient_numerator_eval);
-        updated_alpha_base = UltraFixedBaseWidget::compute_quotient_evaluation_contribution(
-            key, updated_alpha_base, transcript, quotient_numerator_eval);
         updated_alpha_base = GenPermSortWidget::compute_quotient_evaluation_contribution(
             key, updated_alpha_base, transcript, quotient_numerator_eval);
         updated_alpha_base = EllipticWidget::compute_quotient_evaluation_contribution(
@@ -181,8 +176,6 @@ class ultra_to_standard_verifier_settings : public ultra_verifier_settings {
   public:
     typedef VerifierPlookupArithmeticWidget<fr, g1::affine_element, Transcript, ultra_to_standard_settings>
         PlookupArithmeticWidget;
-    typedef VerifierUltraFixedBaseWidget<fr, g1::affine_element, Transcript, ultra_to_standard_settings>
-        UltraFixedBaseWidget;
     typedef VerifierGenPermSortWidget<fr, g1::affine_element, Transcript, ultra_to_standard_settings> GenPermSortWidget;
     typedef VerifierTurboLogicWidget<fr, g1::affine_element, Transcript, ultra_to_standard_settings> TurboLogicWidget;
     typedef VerifierPermutationWidget<fr, g1::affine_element, Transcript> PermutationWidget;
@@ -194,4 +187,20 @@ class ultra_to_standard_verifier_settings : public ultra_verifier_settings {
     static constexpr transcript::HashType hash_type = transcript::HashType::PedersenBlake3s;
 };
 
-} // namespace plonk
+// This is neededed for the Noir backend. The ultra verifier contract uses 32-byte challenges generated with Keccak256.
+class ultra_with_keccak_verifier_settings : public ultra_verifier_settings {
+  public:
+    typedef VerifierPlookupArithmeticWidget<fr, g1::affine_element, Transcript, ultra_with_keccak_settings>
+        PlookupArithmeticWidget;
+    typedef VerifierGenPermSortWidget<fr, g1::affine_element, Transcript, ultra_with_keccak_settings> GenPermSortWidget;
+    typedef VerifierTurboLogicWidget<fr, g1::affine_element, Transcript, ultra_with_keccak_settings> TurboLogicWidget;
+    typedef VerifierPermutationWidget<fr, g1::affine_element, Transcript> PermutationWidget;
+    typedef VerifierPlookupWidget<fr, g1::affine_element, Transcript> PlookupWidget;
+    typedef VerifierEllipticWidget<fr, g1::affine_element, Transcript, ultra_with_keccak_settings> EllipticWidget;
+    typedef VerifierPlookupAuxiliaryWidget<fr, g1::affine_element, Transcript, ultra_with_keccak_settings>
+        PlookupAuxiliaryWidget;
+
+    static constexpr size_t num_challenge_bytes = 32;
+    static constexpr transcript::HashType hash_type = transcript::HashType::Keccak256;
+};
+} // namespace proof_system::plonk

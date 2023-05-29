@@ -1,8 +1,9 @@
 #include "acir_format.hpp"
+#include "barretenberg/common/log.hpp"
 
 namespace acir_format {
 
-void read_witness(TurboComposer& composer, std::vector<barretenberg::fr> witness)
+void read_witness(Composer& composer, std::vector<barretenberg::fr> witness)
 {
     composer.variables[0] = 0;
     for (size_t i = 0; i < witness.size(); ++i) {
@@ -10,10 +11,10 @@ void read_witness(TurboComposer& composer, std::vector<barretenberg::fr> witness
     }
 }
 
-void create_circuit(TurboComposer& composer, const acir_format& constraint_system)
+void create_circuit(Composer& composer, const acir_format& constraint_system)
 {
     if (constraint_system.public_inputs.size() > constraint_system.varnum) {
-        std::cout << "too many public inputs!" << std::endl;
+        info("create_circuit: too many public inputs!");
     }
 
     for (size_t i = 1; i < constraint_system.varnum; ++i) {
@@ -22,7 +23,6 @@ void create_circuit(TurboComposer& composer, const acir_format& constraint_syste
         if (std::find(constraint_system.public_inputs.begin(), constraint_system.public_inputs.end(), i) !=
             constraint_system.public_inputs.end()) {
             composer.add_public_variable(0);
-
         } else {
             composer.add_variable(0);
         }
@@ -41,7 +41,7 @@ void create_circuit(TurboComposer& composer, const acir_format& constraint_syste
 
     // Add range constraint
     for (const auto& constraint : constraint_system.range_constraints) {
-        composer.decompose_into_base4_accumulators(constraint.witness, constraint.num_bits, "");
+        composer.create_range_constraint(constraint.witness, constraint.num_bits, "");
     }
 
     // Add sha256 constraints
@@ -49,9 +49,9 @@ void create_circuit(TurboComposer& composer, const acir_format& constraint_syste
         create_sha256_constraints(composer, constraint);
     }
 
-    // Add merkle membership constraints
-    for (const auto& constraint : constraint_system.merkle_membership_constraints) {
-        create_merkle_check_membership_constraint(composer, constraint);
+    // Add compute merkle root constraints
+    for (const auto& constraint : constraint_system.compute_merkle_root_constraints) {
+        create_compute_merkle_root_constraint(composer, constraint);
     }
 
     // Add schnorr constraints
@@ -61,12 +61,20 @@ void create_circuit(TurboComposer& composer, const acir_format& constraint_syste
 
     // Add ECDSA constraints
     for (const auto& constraint : constraint_system.ecdsa_constraints) {
-        create_ecdsa_verify_constraints(composer, constraint);
+        create_ecdsa_verify_constraints(composer, constraint, false);
     }
 
     // Add blake2s constraints
     for (const auto& constraint : constraint_system.blake2s_constraints) {
         create_blake2s_constraints(composer, constraint);
+    }
+
+    // Add keccak constraints
+    for (const auto& constraint : constraint_system.keccak_constraints) {
+        create_keccak_constraints(composer, constraint);
+    }
+    for (const auto& constraint : constraint_system.keccak_var_constraints) {
+        create_keccak_var_constraints(composer, constraint);
     }
 
     // Add pedersen constraints
@@ -83,16 +91,21 @@ void create_circuit(TurboComposer& composer, const acir_format& constraint_syste
     for (const auto& constraint : constraint_system.hash_to_field_constraints) {
         create_hash_to_field_constraints(composer, constraint);
     }
+
+    // Add block constraints
+    for (const auto& constraint : constraint_system.block_constraints) {
+        create_block_constraints(composer, constraint);
+    }
 }
 
-TurboComposer create_circuit(const acir_format& constraint_system,
-                             std::unique_ptr<bonk::ReferenceStringFactory>&& crs_factory)
+Composer create_circuit(const acir_format& constraint_system,
+                        std::unique_ptr<proof_system::ReferenceStringFactory>&& crs_factory)
 {
     if (constraint_system.public_inputs.size() > constraint_system.varnum) {
-        std::cout << "too many public inputs!" << std::endl;
+        info("create_circuit: too many public inputs!");
     }
 
-    TurboComposer composer(std::move(crs_factory));
+    Composer composer(std::move(crs_factory));
 
     for (size_t i = 1; i < constraint_system.varnum; ++i) {
         // If the index is in the public inputs vector, then we add it as a public input
@@ -119,7 +132,7 @@ TurboComposer create_circuit(const acir_format& constraint_system,
 
     // Add range constraint
     for (const auto& constraint : constraint_system.range_constraints) {
-        composer.decompose_into_base4_accumulators(constraint.witness, constraint.num_bits, "");
+        composer.create_range_constraint(constraint.witness, constraint.num_bits, "");
     }
 
     // Add sha256 constraints
@@ -127,9 +140,9 @@ TurboComposer create_circuit(const acir_format& constraint_system,
         create_sha256_constraints(composer, constraint);
     }
 
-    // Add merkle membership constraints
-    for (const auto& constraint : constraint_system.merkle_membership_constraints) {
-        create_merkle_check_membership_constraint(composer, constraint);
+    // Add compute merkle root constraints
+    for (const auto& constraint : constraint_system.compute_merkle_root_constraints) {
+        create_compute_merkle_root_constraint(composer, constraint);
     }
 
     // Add schnorr constraints
@@ -139,12 +152,20 @@ TurboComposer create_circuit(const acir_format& constraint_system,
 
     // Add ECDSA constraints
     for (const auto& constraint : constraint_system.ecdsa_constraints) {
-        create_ecdsa_verify_constraints(composer, constraint);
+        create_ecdsa_verify_constraints(composer, constraint, false);
     }
 
     // Add blake2s constraints
     for (const auto& constraint : constraint_system.blake2s_constraints) {
         create_blake2s_constraints(composer, constraint);
+    }
+
+    // Add keccak constraints
+    for (const auto& constraint : constraint_system.keccak_constraints) {
+        create_keccak_constraints(composer, constraint);
+    }
+    for (const auto& constraint : constraint_system.keccak_var_constraints) {
+        create_keccak_var_constraints(composer, constraint);
     }
 
     // Add pedersen constraints
@@ -162,18 +183,23 @@ TurboComposer create_circuit(const acir_format& constraint_system,
         create_hash_to_field_constraints(composer, constraint);
     }
 
+    // Add block constraints
+    for (const auto& constraint : constraint_system.block_constraints) {
+        create_block_constraints(composer, constraint);
+    }
+
     return composer;
 }
 
-TurboComposer create_circuit_with_witness(const acir_format& constraint_system,
-                                          std::vector<fr> witness,
-                                          std::unique_ptr<ReferenceStringFactory>&& crs_factory)
+Composer create_circuit_with_witness(const acir_format& constraint_system,
+                                     std::vector<fr> witness,
+                                     std::unique_ptr<ReferenceStringFactory>&& crs_factory)
 {
     if (constraint_system.public_inputs.size() > constraint_system.varnum) {
-        std::cout << "too many public inputs!" << std::endl;
+        info("create_circuit_with_witness: too many public inputs!");
     }
 
-    TurboComposer composer(std::move(crs_factory));
+    Composer composer(std::move(crs_factory));
 
     for (size_t i = 1; i < constraint_system.varnum; ++i) {
         // If the index is in the public inputs vector, then we add it as a public input
@@ -203,7 +229,7 @@ TurboComposer create_circuit_with_witness(const acir_format& constraint_system,
 
     // Add range constraint
     for (const auto& constraint : constraint_system.range_constraints) {
-        composer.decompose_into_base4_accumulators(constraint.witness, constraint.num_bits, "");
+        composer.create_range_constraint(constraint.witness, constraint.num_bits, "");
     }
 
     // Add sha256 constraints
@@ -211,9 +237,9 @@ TurboComposer create_circuit_with_witness(const acir_format& constraint_system,
         create_sha256_constraints(composer, constraint);
     }
 
-    // Add merkle membership constraints
-    for (const auto& constraint : constraint_system.merkle_membership_constraints) {
-        create_merkle_check_membership_constraint(composer, constraint);
+    // Add compute merkle root constraints
+    for (const auto& constraint : constraint_system.compute_merkle_root_constraints) {
+        create_compute_merkle_root_constraint(composer, constraint);
     }
 
     // Add schnorr constraints
@@ -231,6 +257,14 @@ TurboComposer create_circuit_with_witness(const acir_format& constraint_system,
         create_blake2s_constraints(composer, constraint);
     }
 
+    // Add keccak constraints
+    for (const auto& constraint : constraint_system.keccak_constraints) {
+        create_keccak_constraints(composer, constraint);
+    }
+    for (const auto& constraint : constraint_system.keccak_var_constraints) {
+        create_keccak_var_constraints(composer, constraint);
+    }
+
     // Add pedersen constraints
     for (const auto& constraint : constraint_system.pedersen_constraints) {
         create_pedersen_constraint(composer, constraint);
@@ -246,15 +280,20 @@ TurboComposer create_circuit_with_witness(const acir_format& constraint_system,
         create_hash_to_field_constraints(composer, constraint);
     }
 
-    return composer;
-}
-TurboComposer create_circuit_with_witness(const acir_format& constraint_system, std::vector<fr> witness)
-{
-    if (constraint_system.public_inputs.size() > constraint_system.varnum) {
-        std::cout << "too many public inputs!" << std::endl;
+    // Add block constraints
+    for (const auto& constraint : constraint_system.block_constraints) {
+        create_block_constraints(composer, constraint);
     }
 
-    auto composer = TurboComposer();
+    return composer;
+}
+Composer create_circuit_with_witness(const acir_format& constraint_system, std::vector<fr> witness)
+{
+    if (constraint_system.public_inputs.size() > constraint_system.varnum) {
+        info("create_circuit_with_witness: too many public inputs!");
+    }
+
+    auto composer = Composer();
 
     for (size_t i = 1; i < constraint_system.varnum; ++i) {
         // If the index is in the public inputs vector, then we add it as a public input
@@ -284,7 +323,7 @@ TurboComposer create_circuit_with_witness(const acir_format& constraint_system, 
 
     // Add range constraint
     for (const auto& constraint : constraint_system.range_constraints) {
-        composer.decompose_into_base4_accumulators(constraint.witness, constraint.num_bits, "");
+        composer.create_range_constraint(constraint.witness, constraint.num_bits, "");
     }
 
     // Add sha256 constraints
@@ -292,9 +331,9 @@ TurboComposer create_circuit_with_witness(const acir_format& constraint_system, 
         create_sha256_constraints(composer, constraint);
     }
 
-    // Add merkle membership constraints
-    for (const auto& constraint : constraint_system.merkle_membership_constraints) {
-        create_merkle_check_membership_constraint(composer, constraint);
+    // Add compute merkle root constraints
+    for (const auto& constraint : constraint_system.compute_merkle_root_constraints) {
+        create_compute_merkle_root_constraint(composer, constraint);
     }
 
     // Add schnorr constraints
@@ -312,6 +351,14 @@ TurboComposer create_circuit_with_witness(const acir_format& constraint_system, 
         create_blake2s_constraints(composer, constraint);
     }
 
+    // Add keccak constraints
+    for (const auto& constraint : constraint_system.keccak_constraints) {
+        create_keccak_constraints(composer, constraint);
+    }
+    for (const auto& constraint : constraint_system.keccak_var_constraints) {
+        create_keccak_var_constraints(composer, constraint);
+    }
+
     // Add pedersen constraints
     for (const auto& constraint : constraint_system.pedersen_constraints) {
         create_pedersen_constraint(composer, constraint);
@@ -327,12 +374,17 @@ TurboComposer create_circuit_with_witness(const acir_format& constraint_system, 
         create_hash_to_field_constraints(composer, constraint);
     }
 
+    // Add block constraints
+    for (const auto& constraint : constraint_system.block_constraints) {
+        create_block_constraints(composer, constraint);
+    }
+
     return composer;
 }
-void create_circuit_with_witness(TurboComposer& composer, const acir_format& constraint_system, std::vector<fr> witness)
+void create_circuit_with_witness(Composer& composer, const acir_format& constraint_system, std::vector<fr> witness)
 {
     if (constraint_system.public_inputs.size() > constraint_system.varnum) {
-        std::cout << "too many public inputs!" << std::endl;
+        info("create_circuit_with_witness: too many public inputs!");
     }
 
     for (size_t i = 1; i < constraint_system.varnum; ++i) {
@@ -363,7 +415,7 @@ void create_circuit_with_witness(TurboComposer& composer, const acir_format& con
 
     // Add range constraint
     for (const auto& constraint : constraint_system.range_constraints) {
-        composer.decompose_into_base4_accumulators(constraint.witness, constraint.num_bits, "");
+        composer.create_range_constraint(constraint.witness, constraint.num_bits, "");
     }
 
     // Add sha256 constraints
@@ -371,9 +423,9 @@ void create_circuit_with_witness(TurboComposer& composer, const acir_format& con
         create_sha256_constraints(composer, constraint);
     }
 
-    // Add merkle membership constraints
-    for (const auto& constraint : constraint_system.merkle_membership_constraints) {
-        create_merkle_check_membership_constraint(composer, constraint);
+    // Add compute merkle root constraints
+    for (const auto& constraint : constraint_system.compute_merkle_root_constraints) {
+        create_compute_merkle_root_constraint(composer, constraint);
     }
 
     // Add schnorr constraints
@@ -391,6 +443,14 @@ void create_circuit_with_witness(TurboComposer& composer, const acir_format& con
         create_blake2s_constraints(composer, constraint);
     }
 
+    // Add keccak constraints
+    for (const auto& constraint : constraint_system.keccak_constraints) {
+        create_keccak_constraints(composer, constraint);
+    }
+    for (const auto& constraint : constraint_system.keccak_var_constraints) {
+        create_keccak_var_constraints(composer, constraint);
+    }
+
     // Add pedersen constraints
     for (const auto& constraint : constraint_system.pedersen_constraints) {
         create_pedersen_constraint(composer, constraint);
@@ -404,6 +464,11 @@ void create_circuit_with_witness(TurboComposer& composer, const acir_format& con
     // Add hash to field constraints
     for (const auto& constraint : constraint_system.hash_to_field_constraints) {
         create_hash_to_field_constraints(composer, constraint);
+    }
+
+    // Add block constraints
+    for (const auto& constraint : constraint_system.block_constraints) {
+        create_block_constraints(composer, constraint);
     }
 }
 

@@ -1,12 +1,13 @@
 #include "schnorr.hpp"
 #include <array>
-#include "barretenberg/crypto/pedersen/pedersen.hpp"
+#include "barretenberg/crypto/pedersen_commitment/pedersen.hpp"
 #include "barretenberg/ecc/curves/grumpkin/grumpkin.hpp"
 #include "barretenberg/stdlib/hash/blake2s/blake2s.hpp"
+#include "barretenberg/stdlib/commitment/pedersen/pedersen.hpp"
 
 #include "../../primitives/composers/composers.hpp"
 
-namespace plonk {
+namespace proof_system::plonk {
 namespace stdlib {
 namespace schnorr {
 
@@ -119,12 +120,12 @@ point<C> variable_base_mul(const point<C>& pub_key, const field_t<C>& low_bits, 
     field_t<C> zero_test = (low_bits * high_bits);
     zero_test.assert_is_not_zero();
 
-    const auto low_wnaf = plonk::stdlib::schnorr::convert_field_into_wnaf(context, low_bits);
-    const auto high_wnaf = plonk::stdlib::schnorr::convert_field_into_wnaf(context, high_bits);
+    const auto low_wnaf = stdlib::schnorr::convert_field_into_wnaf(context, low_bits);
+    const auto high_wnaf = stdlib::schnorr::convert_field_into_wnaf(context, high_bits);
     // current_accumulator is pub_key, so init is true, so high_output is [high_wnaf]pub_key
-    point<C> high_output = plonk::stdlib::schnorr::variable_base_mul(pub_key, pub_key, high_wnaf);
+    point<C> high_output = stdlib::schnorr::variable_base_mul(pub_key, pub_key, high_wnaf);
     // compute output = [low_wnaf]pub_key + [2^128]high_output.
-    point<C> output = plonk::stdlib::schnorr::variable_base_mul(pub_key, high_output, low_wnaf);
+    point<C> output = stdlib::schnorr::variable_base_mul(pub_key, high_output, low_wnaf);
     return output;
 }
 
@@ -161,7 +162,7 @@ point<C> variable_base_mul(const point<C>& pub_key, const point<C>& current_accu
 
     // Various elliptic curve point additions that follow assume that the two points are distinct and not mutually
     // inverse. collision_offset is chosen to prevent a malicious prover from exploiting this assumption.
-    grumpkin::g1::affine_element collision_offset = crypto::pedersen::get_generator_data(DEFAULT_GEN_1).generator;
+    grumpkin::g1::affine_element collision_offset = crypto::generators::get_generator_data(DEFAULT_GEN_1).generator;
     grumpkin::g1::affine_element collision_end = collision_offset * grumpkin::fr(uint256_t(1) << 129);
 
     const bool init = current_accumulator.x.get_value() == pub_key.x.get_value();
@@ -290,7 +291,7 @@ std::array<field_t<C>, 2> verify_signature_internal(const byte_array<C>& message
 
     // build input (pedersen(([s]g + [e]pub).x | pub.x | pub.y) | message) to hash function
     // pedersen hash ([r].x | pub.x) to make sure the size of `hash_input` is <= 64 bytes for a 32 byte message
-    byte_array<C> hash_input(stdlib::pedersen<C>::compress({ x_3, pub_key.x, pub_key.y }));
+    byte_array<C> hash_input(stdlib::pedersen_commitment<C>::compress({ x_3, pub_key.x, pub_key.y }));
     hash_input.write(message);
 
     // compute  e' = hash(([s]g + [e]pub).x | message)
@@ -376,4 +377,4 @@ template signature_bits<plonk::UltraComposer> convert_signature<plonk::UltraComp
     plonk::UltraComposer*, const crypto::schnorr::signature&);
 } // namespace schnorr
 } // namespace stdlib
-} // namespace plonk
+} // namespace proof_system::plonk

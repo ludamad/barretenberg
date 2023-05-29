@@ -5,7 +5,7 @@
 #include "barretenberg/numeric/random/engine.hpp"
 
 using namespace benchmark;
-using namespace plonk::stdlib::merkle_tree;
+using namespace proof_system::plonk::stdlib::merkle_tree;
 
 namespace {
 auto& engine = numeric::random::get_debug_engine();
@@ -25,7 +25,7 @@ static std::vector<fr> VALUES = []() {
 void hash(State& state) noexcept
 {
     for (auto _ : state) {
-        compress_native({ 0, 0, 0, 0 }, { 1, 1, 1, 1 });
+        hash_pair_native({ 0, 0, 0, 0 }, { 1, 1, 1, 1 });
     }
 }
 BENCHMARK(hash)->MinTime(5);

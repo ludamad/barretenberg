@@ -3,15 +3,16 @@
 #include "sign_join_split_tx.hpp"
 #include "../notes/native/index.hpp"
 #include "barretenberg/stdlib/merkle_tree/hash_path.hpp"
+#include "barretenberg/join_split_example/types.hpp"
 
 namespace join_split_example {
 namespace proofs {
 namespace join_split {
 
 using namespace join_split_example::proofs::join_split;
-using namespace plonk::stdlib::types;
+using namespace proof_system::plonk::stdlib;
 using namespace join_split_example::proofs::notes::native;
-using namespace plonk::stdlib::merkle_tree;
+using namespace proof_system::plonk::stdlib::merkle_tree;
 
 join_split_tx noop_tx()
 {
@@ -58,7 +59,7 @@ join_split_tx noop_tx()
     return tx;
 }
 
-circuit_data get_circuit_data(std::shared_ptr<bonk::ReferenceStringFactory> const& srs, bool mock)
+circuit_data get_circuit_data(std::shared_ptr<proof_system::ReferenceStringFactory> const& srs, bool mock)
 {
     std::cerr << "Getting join-split circuit data..." << std::endl;
 

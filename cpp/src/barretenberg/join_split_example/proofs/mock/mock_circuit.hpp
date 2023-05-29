@@ -1,13 +1,12 @@
 #pragma once
 #include "barretenberg/common/map.hpp"
 #include "barretenberg/stdlib/primitives/field/field.hpp"
-#include "barretenberg/stdlib/hash/pedersen/pedersen.hpp"
-
+#include "barretenberg/stdlib/commitment/pedersen/pedersen.hpp"
 namespace join_split_example {
 namespace proofs {
 namespace mock {
 
-using namespace plonk::stdlib;
+using namespace proof_system::plonk::stdlib;
 
 template <typename Composer> void mock_circuit(Composer& composer, std::vector<fr> const& public_inputs_)
 {
@@ -15,7 +14,8 @@ template <typename Composer> void mock_circuit(Composer& composer, std::vector<f
     for (auto& p : public_inputs) {
         p.set_public();
     }
-    plonk::stdlib::pedersen<Composer>::compress(field_t(witness_t(&composer, 1)), field_t(witness_t(&composer, 1)));
+    plonk::stdlib::pedersen_commitment<Composer>::compress(field_t(witness_t(&composer, 1)),
+                                                           field_t(witness_t(&composer, 1)));
 }
 
 } // namespace mock

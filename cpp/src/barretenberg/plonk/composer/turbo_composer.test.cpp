@@ -1,16 +1,17 @@
 #include "turbo_composer.hpp"
-#include "barretenberg/crypto/pedersen/pedersen.hpp"
+#include "barretenberg/crypto/pedersen_commitment/pedersen.hpp"
 #include <gtest/gtest.h>
-#include "barretenberg/proof_system/proving_key/serialize.hpp"
+#include "barretenberg/plonk/proof_system/proving_key/serialize.hpp"
 
 using namespace barretenberg;
-using namespace bonk;
-using namespace crypto::pedersen;
+using namespace proof_system;
+using namespace crypto::pedersen_commitment;
+using namespace crypto::generators;
 
 namespace {
 auto& engine = numeric::random::get_debug_engine();
 }
-namespace plonk {
+namespace proof_system::plonk {
 TEST(turbo_composer, base_case)
 {
     TurboComposer composer = TurboComposer();
@@ -34,13 +35,13 @@ TEST(turbo_composer, composer_from_serialized_keys)
 
     auto pk_buf = to_buffer(*composer.compute_proving_key());
     auto vk_buf = to_buffer(*composer.compute_verification_key());
-    auto pk_data = from_buffer<bonk::proving_key_data>(pk_buf);
-    auto vk_data = from_buffer<bonk::verification_key_data>(vk_buf);
+    auto pk_data = from_buffer<plonk::proving_key_data>(pk_buf);
+    auto vk_data = from_buffer<plonk::verification_key_data>(vk_buf);
 
-    auto crs = std::make_unique<bonk::FileReferenceStringFactory>("../srs_db/ignition");
+    auto crs = std::make_unique<proof_system::FileReferenceStringFactory>("../srs_db/ignition");
     auto proving_key =
-        std::make_shared<bonk::proving_key>(std::move(pk_data), crs->get_prover_crs(pk_data.circuit_size + 1));
-    auto verification_key = std::make_shared<bonk::verification_key>(std::move(vk_data), crs->get_verifier_crs());
+        std::make_shared<plonk::proving_key>(std::move(pk_data), crs->get_prover_crs(pk_data.circuit_size + 1));
+    auto verification_key = std::make_shared<plonk::verification_key>(std::move(vk_data), crs->get_verifier_crs());
 
     TurboComposer composer2 = TurboComposer(proving_key, verification_key);
     composer2.add_public_variable(a);
@@ -212,8 +213,8 @@ TEST(turbo_composer, small_scalar_multipliers)
     constexpr size_t num_wnaf_bits = (num_quads << 1) + 1;
     constexpr size_t initial_exponent = ((num_bits & 1) == 1) ? num_bits - 1 : num_bits;
     constexpr uint64_t bit_mask = (1ULL << num_bits) - 1UL;
-    auto gen_data = crypto::pedersen::get_generator_data(DEFAULT_GEN_1);
-    const crypto::pedersen::fixed_base_ladder* ladder = gen_data.get_ladder(num_bits);
+    auto gen_data = crypto::generators::get_generator_data(DEFAULT_GEN_1);
+    const crypto::generators::fixed_base_ladder* ladder = gen_data.get_ladder(num_bits);
     grumpkin::g1::affine_element generator = gen_data.generator;
 
     grumpkin::g1::element origin_points[2];
@@ -252,7 +253,7 @@ TEST(turbo_composer, small_scalar_multipliers)
     fr one = fr::one();
     fr three = ((one + one) + one);
     for (size_t i = 0; i < num_quads; ++i) {
-        uint64_t entry = wnaf_entries[i + 1] & crypto::pedersen::WNAF_MASK;
+        uint64_t entry = wnaf_entries[i + 1] & crypto::generators::WNAF_MASK;
         fr prev_accumulator = accumulator_transcript[i] + accumulator_transcript[i];
         prev_accumulator = prev_accumulator + prev_accumulator;
 
@@ -341,8 +342,8 @@ TEST(turbo_composer, large_scalar_multipliers)
     constexpr size_t num_wnaf_bits = (num_quads << 1) + 1;
 
     constexpr size_t initial_exponent = num_bits; // ((num_bits & 1) == 1) ? num_bits - 1 : num_bits;
-    auto gen_data = crypto::pedersen::get_generator_data(DEFAULT_GEN_1);
-    const crypto::pedersen::fixed_base_ladder* ladder = gen_data.get_ladder(num_bits);
+    auto gen_data = crypto::generators::get_generator_data(DEFAULT_GEN_1);
+    const crypto::generators::fixed_base_ladder* ladder = gen_data.get_ladder(num_bits);
     grumpkin::g1::affine_element generator = gen_data.generator;
 
     grumpkin::g1::element origin_points[2];
@@ -382,7 +383,7 @@ TEST(turbo_composer, large_scalar_multipliers)
     fr one = fr::one();
     fr three = ((one + one) + one);
     for (size_t i = 0; i < num_quads; ++i) {
-        uint64_t entry = wnaf_entries[i + 1] & crypto::pedersen::WNAF_MASK;
+        uint64_t entry = wnaf_entries[i + 1] & crypto::generators::WNAF_MASK;
         fr prev_accumulator = accumulator_transcript[i] + accumulator_transcript[i];
         prev_accumulator = prev_accumulator + prev_accumulator;
 
@@ -978,8 +979,8 @@ TEST(turbo_composer, test_check_circuit_fixed_group)
     constexpr size_t num_wnaf_bits = (num_quads << 1) + 1;
 
     constexpr size_t initial_exponent = num_bits; // ((num_bits & 1) == 1) ? num_bits - 1 : num_bits;
-    auto gen_data = crypto::pedersen::get_generator_data(DEFAULT_GEN_1);
-    const crypto::pedersen::fixed_base_ladder* ladder = gen_data.get_ladder(num_bits);
+    auto gen_data = crypto::generators::get_generator_data(DEFAULT_GEN_1);
+    const crypto::generators::fixed_base_ladder* ladder = gen_data.get_ladder(num_bits);
     grumpkin::g1::affine_element generator = gen_data.generator;
 
     grumpkin::g1::element origin_points[2];
@@ -1152,4 +1153,4 @@ TEST(turbo_composer, test_check_circuit_xor)
 
     EXPECT_EQ(result, true);
 }
-} // namespace plonk
+} // namespace proof_system::plonk

@@ -1,19 +1,38 @@
+#include <gtest/gtest.h>
+
 #include "merkle_tree.hpp"
 #include "membership.hpp"
 #include "memory_store.hpp"
 #include "memory_tree.hpp"
-#include <gtest/gtest.h>
-#include "barretenberg/stdlib/types/types.hpp"
+
+#include "barretenberg/plonk/composer/ultra_composer.hpp"
+#include "barretenberg/stdlib/primitives/bool/bool.hpp"
+#include "barretenberg/stdlib/primitives/field/field.hpp"
+#include "barretenberg/stdlib/primitives/witness/witness.hpp"
+
+namespace {
+auto& engine = numeric::random::get_debug_engine();
+}
+
+namespace proof_system::stdlib_merkle_test {
 
 using namespace barretenberg;
-using namespace plonk::stdlib::types;
-using namespace plonk::stdlib::merkle_tree;
+using namespace proof_system::plonk::stdlib::merkle_tree;
+using namespace plonk::stdlib;
+
+using Composer = plonk::UltraComposer;
+using Prover = plonk::UltraProver;
+using Verifier = plonk::UltraVerifier;
+
+using bool_ct = bool_t<Composer>;
+using field_ct = field_t<Composer>;
+using witness_ct = witness_t<Composer>;
 
 TEST(stdlib_merkle_tree, test_check_membership)
 {
     MemoryStore store;
     auto db = MerkleTree(store, 3);
-    Composer composer = Composer();
+    auto composer = Composer();
 
     // Check membership at index 0.
     auto zero = field_ct(witness_ct(&composer, fr::zero())).decompose_into_bits();
@@ -45,7 +64,7 @@ TEST(stdlib_merkle_tree, test_batch_update_membership)
 {
     MemoryStore store;
     MerkleTree db(store, 4);
-    Composer composer = Composer();
+    auto composer = Composer();
     // Fill in an arbitrary value at i = 2.
     db.update_element(2, fr::random_element());
     // Define old state.
@@ -74,7 +93,7 @@ TEST(stdlib_merkle_tree, test_assert_check_membership)
 {
     MemoryStore store;
     auto db = MerkleTree(store, 3);
-    Composer composer = Composer();
+    auto composer = Composer();
 
     auto zero = field_ct(witness_ct(&composer, fr::zero())).decompose_into_bits();
     field_ct root = witness_ct(&composer, db.root());
@@ -97,7 +116,7 @@ TEST(stdlib_merkle_tree, test_assert_check_membership_fail)
     MemoryStore store;
     auto db = MerkleTree(store, 3);
 
-    Composer composer = Composer();
+    auto composer = Composer();
 
     auto zero = field_ct(witness_ct(&composer, fr::zero())).decompose_into_bits();
     field_ct root = witness_ct(&composer, db.root());
@@ -121,7 +140,7 @@ TEST(stdlib_merkle_tree, test_update_members)
         MemoryStore store;
         auto db = MerkleTree(store, 3);
 
-        Composer composer = Composer();
+        auto composer = Composer();
 
         auto zero = field_ct(witness_ct(&composer, fr::zero())).decompose_into_bits();
 
@@ -150,7 +169,7 @@ TEST(stdlib_merkle_tree, test_update_members)
         MemoryStore store;
         auto db = MerkleTree(store, 3);
 
-        Composer composer = Composer();
+        auto composer = Composer();
 
         auto zero = field_ct(witness_ct(&composer, fr::zero())).decompose_into_bits();
 
@@ -185,7 +204,7 @@ TEST(stdlib_merkle_tree, test_tree)
     MerkleTree db(store, depth);
     MemoryTree mem_tree(depth);
 
-    Composer composer = Composer();
+    auto composer = Composer();
 
     auto zero_field = field_ct(witness_ct(&composer, fr::zero()));
     auto values = std::vector<field_ct>(num, zero_field);
@@ -203,3 +222,70 @@ TEST(stdlib_merkle_tree, test_tree)
     bool result = verifier.verify_proof(proof);
     EXPECT_EQ(result, true);
 }
+
+TEST(stdlib_merkle_tree, test_update_memberships)
+{
+    constexpr size_t depth = 4;
+    MemoryStore store;
+    MerkleTree tree(store, depth);
+
+    auto composer = Composer();
+
+    constexpr size_t filled = (1UL << depth) / 2;
+    std::vector<fr> filled_values;
+    for (size_t i = 0; i < filled; i++) {
+        uint256_t val = fr::random_element();
+        tree.update_element(i, val);
+        filled_values.push_back(val);
+    }
+
+    // old state
+    fr old_root = tree.root();
+    std::vector<size_t> old_indices = { 0, 2, 5, 7 };
+
+    std::vector<fr> old_values;
+    std::vector<fr_hash_path> old_hash_paths;
+    for (size_t i = 0; i < old_indices.size(); i++) {
+        old_values.push_back(filled_values[old_indices[i]]);
+    }
+
+    // new state
+    std::vector<fr> new_values;
+    std::vector<fr> new_roots;
+    for (size_t i = 0; i < old_indices.size(); i++) {
+        uint256_t val = fr::random_element();
+        new_values.push_back(val);
+        old_hash_paths.push_back(tree.get_hash_path(old_indices[i]));
+        new_roots.push_back(tree.update_element(old_indices[i], new_values[i]));
+    }
+
+    // old state circuit types
+    field_ct old_root_ct = witness_ct(&composer, old_root);
+    std::vector<bit_vector<Composer>> old_indices_ct;
+    std::vector<field_ct> old_values_ct;
+    std::vector<hash_path<Composer>> old_hash_paths_ct;
+
+    // new state circuit types
+    std::vector<field_ct> new_values_ct;
+    std::vector<field_ct> new_roots_ct;
+
+    for (size_t i = 0; i < old_indices.size(); i++) {
+        auto idx_vec = field_ct(witness_ct(&composer, uint256_t(old_indices[i]))).decompose_into_bits(depth);
+        old_indices_ct.push_back(idx_vec);
+        old_values_ct.push_back(witness_ct(&composer, old_values[i]));
+        old_hash_paths_ct.push_back(create_witness_hash_path(composer, old_hash_paths[i]));
+
+        new_values_ct.push_back(witness_ct(&composer, new_values[i]));
+        new_roots_ct.push_back(witness_ct(&composer, new_roots[i]));
+    }
+
+    update_memberships(old_root_ct, new_roots_ct, new_values_ct, old_values_ct, old_hash_paths_ct, old_indices_ct);
+
+    auto prover = composer.create_prover();
+    printf("composer gates = %zu\n", composer.get_num_gates());
+    auto verifier = composer.create_verifier();
+    plonk::proof proof = prover.construct_proof();
+    bool result = verifier.verify_proof(proof);
+    EXPECT_EQ(result, true);
+}
+} // namespace proof_system::stdlib_merkle_test

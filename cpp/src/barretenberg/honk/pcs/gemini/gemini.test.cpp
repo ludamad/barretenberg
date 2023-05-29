@@ -1,12 +1,13 @@
 #include "gemini.hpp"
 
 #include "../commitment_key.test.hpp"
+#include "barretenberg/honk/transcript/transcript.hpp"
 #include "barretenberg/polynomials/polynomial.hpp"
 #include <cstddef>
 #include <gtest/gtest.h>
 #include <span>
 
-namespace honk::pcs::gemini {
+namespace proof_system::honk::pcs::gemini {
 
 template <class Params> class GeminiTest : public CommitmentTest<Params> {
     using Gemini = MultilinearReductionScheme<Params>;
@@ -23,11 +24,9 @@ template <class Params> class GeminiTest : public CommitmentTest<Params> {
                                           std::vector<Commitment> multilinear_commitments,
                                           std::vector<Commitment> multilinear_commitments_to_be_shifted)
     {
-        using Transcript = transcript::StandardTranscript;
-        auto transcript = std::make_shared<Transcript>(StandardHonk::create_manifest(0, log_n));
-        transcript->mock_inputs_prior_to_challenge("rho");
-        transcript->apply_fiat_shamir("rho");
-        const Fr rho = Fr::serialize_from_buffer(transcript->get_challenge("rho").begin());
+        auto prover_transcript = ProverTranscript<Fr>::init_empty();
+
+        const Fr rho = Fr::random_element();
 
         std::vector<Fr> rhos = Gemini::powers_of_rho(rho, multilinear_evaluations.size());
 
@@ -56,19 +55,30 @@ template <class Params> class GeminiTest : public CommitmentTest<Params> {
         // Compute:
         // - (d+1) opening pairs: {r, \hat{a}_0}, {-r^{2^i}, a_i}, i = 0, ..., d-1
         // - (d+1) Fold polynomials Fold_{r}^(0), Fold_{-r}^(0), and Fold^(i), i = 0, ..., d-1
-        auto prover_output = Gemini::reduce_prove(this->ck(),
-                                                  multilinear_evaluation_point,
-                                                  std::move(batched_unshifted),
-                                                  std::move(batched_to_be_shifted),
-                                                  transcript);
+        auto fold_polynomials = Gemini::compute_fold_polynomials(
+            multilinear_evaluation_point, std::move(batched_unshifted), std::move(batched_to_be_shifted));
+
+        for (size_t l = 0; l < log_n - 1; ++l) {
+            std::string label = "FOLD_" + std::to_string(l + 1);
+            auto commitment = this->ck()->commit(fold_polynomials[l + 2]);
+            prover_transcript.send_to_verifier(label, commitment);
+        }
+
+        const Fr r_challenge = prover_transcript.get_challenge("Gemini:r");
+
+        auto prover_output = Gemini::compute_fold_polynomial_evaluations(
+            multilinear_evaluation_point, std::move(fold_polynomials), r_challenge);
+
+        for (size_t l = 0; l < log_n; ++l) {
+            std::string label = "Gemini:a_" + std::to_string(l);
+            const auto& evaluation = prover_output.opening_pairs[l + 1].evaluation;
+            prover_transcript.send_to_verifier(label, evaluation);
+        }
 
         // Check that the Fold polynomials have been evaluated correctly in the prover
         this->verify_batch_opening_pair(prover_output.opening_pairs, prover_output.witnesses);
 
-        // Construct a Gemini proof object consisting of
-        // - d Fold poly evaluations a_0, ..., a_{d-1}
-        // - (d-1) Fold polynomial commitments [Fold^(1)], ..., [Fold^(d-1)]
-        auto gemini_proof = Gemini::reconstruct_proof_from_transcript(transcript, log_n);
+        auto verifier_transcript = VerifierTranscript<Fr>::init_empty(prover_transcript);
 
         // Compute:
         // - Single opening pair: {r, \hat{a}_0}
@@ -78,8 +88,7 @@ template <class Params> class GeminiTest : public CommitmentTest<Params> {
                                                     batched_evaluation,
                                                     batched_commitment_unshifted,
                                                     batched_commitment_to_be_shifted,
-                                                    gemini_proof,
-                                                    transcript);
+                                                    verifier_transcript);
 
         // Check equality of the opening pairs computed by prover and verifier
         for (size_t i = 0; i < (log_n + 1); ++i) {
@@ -228,4 +237,4 @@ TYPED_TEST(GeminiTest, DoubleWithShift)
                                            multilinear_commitments_to_be_shifted);
 }
 
-} // namespace honk::pcs::gemini
+} // namespace proof_system::honk::pcs::gemini

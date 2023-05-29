@@ -10,7 +10,7 @@
 
 using namespace barretenberg;
 
-namespace plonk {
+namespace proof_system::plonk {
 template <typename program_settings>
 VerifierBase<program_settings>::VerifierBase(std::shared_ptr<verification_key> verifier_key,
                                              const transcript::Manifest& input_manifest)
@@ -241,5 +241,6 @@ template class VerifierBase<standard_verifier_settings>;
 template class VerifierBase<turbo_verifier_settings>;
 template class VerifierBase<ultra_verifier_settings>;
 template class VerifierBase<ultra_to_standard_verifier_settings>;
+template class VerifierBase<ultra_with_keccak_verifier_settings>;
 
-} // namespace plonk
+} // namespace proof_system::plonk

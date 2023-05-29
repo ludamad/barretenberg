@@ -10,7 +10,7 @@
 #include "../field/field.hpp"
 #include "./bigfield.hpp"
 #include "barretenberg/honk/composer/standard_honk_composer.hpp"
-#include "barretenberg/honk/composer/standard_plonk_composer.hpp"
+#include "barretenberg/plonk/composer/splitting_tmp/standard_plonk_composer.hpp"
 
 #include "barretenberg/stdlib/primitives/curves/bn254.hpp"
 #include "barretenberg/plonk/proof_system/prover/prover.hpp"
@@ -22,7 +22,7 @@
 
 namespace test_stdlib_bigfield {
 using namespace barretenberg;
-using namespace plonk;
+using namespace proof_system::plonk;
 
 /* A note regarding Plookup:
    stdlib_bigfield_plookup tests were present when this file was standardized
@@ -994,7 +994,7 @@ TYPED_TEST(stdlib_bigfield, division_context)
 // // PLOOKUP TESTS
 // TEST(stdlib_bigfield_plookup, test_mul)
 // {
-//     plonk::UltraComposer composer = plonk::UltraComposer();
+//     plonk::UltraComposer composer = proof_system::plonk::UltraComposer();
 //     size_t num_repetitions = 1;
 //     for (size_t i = 0; i < num_repetitions; ++i) {
 //         fq inputs[3]{ fq::random_element(), fq::random_element(), fq::random_element() };
@@ -1041,7 +1041,7 @@ TYPED_TEST(stdlib_bigfield, division_context)
 
 // TEST(stdlib_bigfield_plookup, test_sqr)
 // {
-//     plonk::UltraComposer composer = plonk::UltraComposer();
+//     plonk::UltraComposer composer = proof_system::plonk::UltraComposer();
 //     size_t num_repetitions = 10;
 //     for (size_t i = 0; i < num_repetitions; ++i) {
 //         fq inputs[3]{ fq::random_element(), fq::random_element(), fq::random_element() };

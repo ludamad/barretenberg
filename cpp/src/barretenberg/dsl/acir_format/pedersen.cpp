@@ -1,11 +1,10 @@
 #include "pedersen.hpp"
-#include "barretenberg/stdlib/types/types.hpp"
-
-using namespace plonk::stdlib::types;
 
 namespace acir_format {
 
-void create_pedersen_constraint(plonk::TurboComposer& composer, const PedersenConstraint& input)
+using namespace proof_system::plonk;
+
+void create_pedersen_constraint(Composer& composer, const PedersenConstraint& input)
 {
     std::vector<field_ct> scalars;
 
@@ -14,7 +13,9 @@ void create_pedersen_constraint(plonk::TurboComposer& composer, const PedersenCo
         field_ct scalar_as_field = field_ct::from_witness_index(&composer, scalar);
         scalars.push_back(scalar_as_field);
     }
-    auto point = pedersen::commit(scalars);
+
+    // TODO: Does Noir need additive homomorphic Pedersen hash? If so, using plookup version won't help.
+    auto point = stdlib::pedersen_plookup_commitment<Composer>::commit(scalars);
 
     composer.assert_equal(point.x.witness_index, input.result_x);
     composer.assert_equal(point.y.witness_index, input.result_y);

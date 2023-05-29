@@ -1,17 +1,20 @@
 #include "standard_honk_composer.hpp"
-#include "barretenberg/honk/sumcheck/relations/relation.hpp"
+#include "barretenberg/honk/sumcheck/relations/relation_parameters.hpp"
 #include "barretenberg/numeric/uint256/uint256.hpp"
-#include "barretenberg/proof_system/flavor/flavor.hpp"
+#include <cstddef>
 #include <cstdint>
+#include <vector>
 #include "barretenberg/honk/proof_system/prover.hpp"
 #include "barretenberg/honk/sumcheck/sumcheck_round.hpp"
-#include "barretenberg/honk/sumcheck/relations/grand_product_computation_relation.hpp"
-#include "barretenberg/honk/sumcheck/relations/grand_product_initialization_relation.hpp"
-#include "barretenberg/honk/utils/public_inputs.hpp"
+#include "barretenberg/honk/sumcheck/relations/permutation_relation.hpp"
+#include "barretenberg/polynomials/polynomial.hpp"
+
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#include "barretenberg/honk/utils/grand_product_delta.hpp"
 
 #include <gtest/gtest.h>
 
-using namespace honk;
+using namespace proof_system::honk;
 
 namespace test_standard_honk_composer {
 /**
@@ -40,22 +43,22 @@ TEST(StandardHonkComposer, SigmaIDCorrectness)
         barretenberg::fr right = barretenberg::fr::one();
 
         // Let's check that indices are the same and nothing is lost, first
-        for (size_t j = 0; j < composer.program_width; ++j) {
-            std::string index = std::to_string(j + 1);
-            const auto& sigma_j = proving_key->polynomial_store.get("sigma_" + index + "_lagrange");
+        size_t wire_idx = 0;
+        for (auto& sigma_polynomial : proving_key->get_sigma_polynomials()) {
             for (size_t i = 0; i < n; ++i) {
-                left *= (gamma + j * n + i);
-                right *= (gamma + sigma_j[i]);
+                left *= (gamma + wire_idx * n + i);
+                right *= (gamma + sigma_polynomial[i]);
             }
             // Ensure that the public inputs cycles are correctly broken
             // and fix the cycle by adding the extra terms
-            if (j == 0) {
+            if (wire_idx == 0) {
                 for (size_t i = 0; i < num_public_inputs; ++i) {
-                    EXPECT_EQ(sigma_j[i], -fr(i + 1));
+                    EXPECT_EQ(sigma_polynomial[i], -fr(i + 1));
                     left *= (gamma - (i + 1));
                     right *= (gamma + (n + i));
                 }
             }
+            ++wire_idx;
         }
 
         EXPECT_EQ(left, right);
@@ -66,11 +69,14 @@ TEST(StandardHonkComposer, SigmaIDCorrectness)
         // Now let's check that witness values correspond to the permutation
         composer.compute_witness();
 
-        for (size_t j = 0; j < composer.program_width; ++j) {
+        auto permutation_polynomials = proving_key->get_sigma_polynomials();
+        auto id_polynomials = proving_key->get_id_polynomials();
+        auto wire_polynomials = proving_key->get_wires();
+        for (size_t j = 0; j < StandardHonkComposer::NUM_WIRES; ++j) {
             std::string index = std::to_string(j + 1);
-            const auto& permutation_polynomial = proving_key->polynomial_store.get("sigma_" + index + "_lagrange");
-            const auto& witness_polynomial = composer.composer_helper.wire_polynomials[j];
-            const auto& id_polynomial = proving_key->polynomial_store.get("id_" + index + "_lagrange");
+            const auto& permutation_polynomial = permutation_polynomials[j];
+            const auto& witness_polynomial = wire_polynomials[j];
+            const auto& id_polynomial = id_polynomials[j];
             // left = ∏ᵢ,ⱼ(ωᵢ,ⱼ + β⋅ind(i,j) + γ)
             // right = ∏ᵢ,ⱼ(ωᵢ,ⱼ + β⋅σ(i,j) + γ)
             for (size_t i = 0; i < proving_key->circuit_size; ++i) {
@@ -93,7 +99,7 @@ TEST(StandardHonkComposer, SigmaIDCorrectness)
         }
 
         // test correctness of the public input delta
-        auto delta = honk::compute_public_input_delta<fr>(public_inputs, beta, gamma, n);
+        auto delta = proof_system::honk::compute_public_input_delta<fr>(public_inputs, beta, gamma, n);
         EXPECT_EQ(left / right, delta);
 
         for (size_t i = 0; i < num_public_inputs; ++i) {
@@ -156,7 +162,8 @@ TEST(StandardHonkComposer, LagrangeCorrectness)
         random_polynomial[i] = barretenberg::fr::random_element();
     }
     // Compute inner product of random polynomial and the first lagrange polynomial
-    barretenberg::polynomial first_lagrange_polynomial = proving_key->polynomial_store.get("L_first_lagrange");
+
+    barretenberg::polynomial first_lagrange_polynomial = proving_key->lagrange_first;
     barretenberg::fr first_product(0);
     for (size_t i = 0; i < proving_key->circuit_size; i++) {
         first_product += random_polynomial[i] * first_lagrange_polynomial[i];
@@ -164,7 +171,7 @@ TEST(StandardHonkComposer, LagrangeCorrectness)
     EXPECT_EQ(first_product, random_polynomial[0]);
 
     // Compute inner product of random polynomial and the last lagrange polynomial
-    barretenberg::polynomial last_lagrange_polynomial = proving_key->polynomial_store.get("L_last_lagrange");
+    auto last_lagrange_polynomial = proving_key->lagrange_last;
     barretenberg::fr last_product(0);
     for (size_t i = 0; i < proving_key->circuit_size; i++) {
         last_product += random_polynomial[i] * last_lagrange_polynomial[i];
@@ -207,14 +214,8 @@ TEST(StandardHonkComposer, AssertEquals)
     auto get_maximum_cycle = [](auto& composer) {
         // Compute the proving key for sigma polynomials
         auto proving_key = composer.compute_proving_key();
-        auto permutation_length = composer.program_width * proving_key->circuit_size;
-        std::vector<polynomial> sigma_polynomials;
-
-        // Put the sigma polynomials into a vector for easy access
-        for (size_t i = 0; i < composer.program_width; i++) {
-            std::string index = std::to_string(i + 1);
-            sigma_polynomials.push_back(proving_key->polynomial_store.get("sigma_" + index + "_lagrange"));
-        }
+        auto permutation_length = composer.NUM_WIRES * proving_key->circuit_size;
+        auto sigma_polynomials = proving_key->get_sigma_polynomials();
 
         // Let's compute the maximum cycle
         size_t maximum_cycle = 0;
@@ -300,112 +301,7 @@ TEST(StandardHonkComposer, VerificationKeyCreation)
     // There is nothing we can really check apart from the fact that constraint selectors and permutation selectors were
     // committed to, we simply check that the verification key now contains the appropriate number of constraint and
     // permutation selector commitments. This method should work with any future arithemtization.
-    EXPECT_EQ(verification_key->commitments.size(),
-              composer.circuit_constructor.selectors.size() + composer.program_width * 2 + 2);
-}
-
-/**
- * @brief A test taking sumcheck relations and applying them to the witness and selector polynomials to ensure that the
- * realtions are correct.
- *
- * TODO(Kesha): We'll have to update this function once we add zk, since the relation will be incorrect for he first few
- * indices
- *
- */
-TEST(StandardHonkComposer, SumcheckRelationCorrectness)
-{
-    // Create a composer and a dummy circuit with a few gates
-    StandardHonkComposer composer = StandardHonkComposer();
-    fr a = fr::one();
-    // Using the public variable to check that public_input_delta is computed and added to the relation correctly
-    uint32_t a_idx = composer.add_public_variable(a);
-    fr b = fr::one();
-    fr c = a + b;
-    fr d = a + c;
-    uint32_t b_idx = composer.add_variable(b);
-    uint32_t c_idx = composer.add_variable(c);
-    uint32_t d_idx = composer.add_variable(d);
-    for (size_t i = 0; i < 16; i++) {
-        composer.create_add_gate({ a_idx, b_idx, c_idx, fr::one(), fr::one(), fr::neg_one(), fr::zero() });
-        composer.create_add_gate({ d_idx, c_idx, a_idx, fr::one(), fr::neg_one(), fr::neg_one(), fr::zero() });
-    }
-    // Create a prover (it will compute proving key and witness)
-    auto prover = composer.create_prover();
-
-    // Generate beta and gamma
-    fr beta = fr::random_element();
-    fr gamma = fr::random_element();
-    fr zeta = fr::random_element();
-
-    // Compute public input delta
-    const auto public_inputs = composer.circuit_constructor.get_public_inputs();
-    auto public_input_delta =
-        honk::compute_public_input_delta<fr>(public_inputs, beta, gamma, prover.key->circuit_size);
-
-    sumcheck::RelationParameters<fr> params{
-        .zeta = zeta,
-        .alpha = fr::one(),
-        .beta = beta,
-        .gamma = gamma,
-        .public_input_delta = public_input_delta,
-    };
-
-    constexpr size_t num_polynomials = bonk::StandardArithmetization::NUM_POLYNOMIALS;
-    // Compute grand product polynomial (now all the necessary polynomials are inside the proving key)
-    polynomial z_perm_poly = prover.compute_grand_product_polynomial(beta, gamma);
-
-    // Create an array of spans to the underlying polynomials to more easily
-    // get the transposition.
-    // Ex: polynomial_spans[3][i] returns the i-th coefficient of the third polynomial
-    // in the list below
-    std::array<std::span<const fr>, num_polynomials> evaluations_array;
-
-    using POLYNOMIAL = bonk::StandardArithmetization::POLYNOMIAL;
-    evaluations_array[POLYNOMIAL::W_L] = prover.wire_polynomials[0];
-    evaluations_array[POLYNOMIAL::W_R] = prover.wire_polynomials[1];
-    evaluations_array[POLYNOMIAL::W_O] = prover.wire_polynomials[2];
-    evaluations_array[POLYNOMIAL::Z_PERM] = z_perm_poly;
-    evaluations_array[POLYNOMIAL::Z_PERM_SHIFT] = z_perm_poly.shifted();
-    evaluations_array[POLYNOMIAL::Q_M] = prover.key->polynomial_store.get("q_m_lagrange");
-    evaluations_array[POLYNOMIAL::Q_L] = prover.key->polynomial_store.get("q_1_lagrange");
-    evaluations_array[POLYNOMIAL::Q_R] = prover.key->polynomial_store.get("q_2_lagrange");
-    evaluations_array[POLYNOMIAL::Q_O] = prover.key->polynomial_store.get("q_3_lagrange");
-    evaluations_array[POLYNOMIAL::Q_C] = prover.key->polynomial_store.get("q_c_lagrange");
-    evaluations_array[POLYNOMIAL::SIGMA_1] = prover.key->polynomial_store.get("sigma_1_lagrange");
-    evaluations_array[POLYNOMIAL::SIGMA_2] = prover.key->polynomial_store.get("sigma_2_lagrange");
-    evaluations_array[POLYNOMIAL::SIGMA_3] = prover.key->polynomial_store.get("sigma_3_lagrange");
-    evaluations_array[POLYNOMIAL::ID_1] = prover.key->polynomial_store.get("id_1_lagrange");
-    evaluations_array[POLYNOMIAL::ID_2] = prover.key->polynomial_store.get("id_2_lagrange");
-    evaluations_array[POLYNOMIAL::ID_3] = prover.key->polynomial_store.get("id_3_lagrange");
-    evaluations_array[POLYNOMIAL::LAGRANGE_FIRST] = prover.key->polynomial_store.get("L_first_lagrange");
-    evaluations_array[POLYNOMIAL::LAGRANGE_LAST] = prover.key->polynomial_store.get("L_last_lagrange");
-
-    // Construct the round for applying sumcheck relations and results for storing computed results
-    auto relations = std::tuple(honk::sumcheck::ArithmeticRelation<fr>(),
-                                honk::sumcheck::GrandProductComputationRelation<fr>(),
-                                honk::sumcheck::GrandProductInitializationRelation<fr>());
-
-    fr result = 0;
-    for (size_t i = 0; i < prover.key->circuit_size; i++) {
-        // Compute an array containing all the evaluations at a given row i
-        std::array<fr, num_polynomials> evaluations_at_index_i;
-        for (size_t j = 0; j < num_polynomials; ++j) {
-            evaluations_at_index_i[j] = evaluations_array[j][i];
-        }
-
-        // For each relation, call the `accumulate_relation_evaluation` over all witness/selector values at the
-        // i-th row/vertex of the hypercube.
-        // We use ASSERT_EQ instead of EXPECT_EQ so that the tests stops at the first index at which the result is not
-        // 0, since result = 0 + C(transposed), which we expect will equal 0.
-        std::get<0>(relations).add_full_relation_value_contribution(result, evaluations_at_index_i, params);
-        ASSERT_EQ(result, 0);
-
-        std::get<1>(relations).add_full_relation_value_contribution(result, evaluations_at_index_i, params);
-        ASSERT_EQ(result, 0);
-
-        std::get<2>(relations).add_full_relation_value_contribution(result, evaluations_at_index_i, params);
-        ASSERT_EQ(result, 0);
-    }
+    EXPECT_EQ(verification_key->size(), composer.circuit_constructor.selectors.size() + composer.NUM_WIRES * 2 + 2);
 }
 
 TEST(StandardHonkComposer, BaseCase)
@@ -453,5 +349,38 @@ TEST(StandardHonkComposer, TwoGates)
 
     run_test(/* expect_verified=*/true);
     run_test(/* expect_verified=*/false);
+}
+
+TEST(StandardHonkComposer, SumcheckEvaluations)
+{
+    auto run_test = [](bool expected_result) {
+        auto composer = StandardHonkComposer();
+        fr a = fr::one();
+        // Construct a small but non-trivial circuit
+        uint32_t a_idx = composer.add_public_variable(a);
+        fr b = fr::one();
+        fr c = a + b;
+        fr d = a + c;
+
+        if (expected_result == false) {
+            d += 1;
+        };
+
+        uint32_t b_idx = composer.add_variable(b);
+        uint32_t c_idx = composer.add_variable(c);
+        uint32_t d_idx = composer.add_variable(d);
+        for (size_t i = 0; i < 16; i++) {
+            composer.create_add_gate({ a_idx, b_idx, c_idx, fr::one(), fr::one(), fr::neg_one(), fr::zero() });
+            composer.create_add_gate({ d_idx, c_idx, a_idx, fr::one(), fr::neg_one(), fr::neg_one(), fr::zero() });
+        }
+        auto prover = composer.create_prover();
+        plonk::proof proof = prover.construct_proof();
+
+        auto verifier = composer.create_verifier();
+        bool verified = verifier.verify_proof(proof);
+        ASSERT_EQ(verified, expected_result);
+    };
+    run_test(/*expected_result=*/true);
+    run_test(/*expected_result=*/false);
 }
 } // namespace test_standard_honk_composer

@@ -1,13 +1,14 @@
 #pragma once
 #include "composer_base.hpp"
+#include "barretenberg/proof_system/types/merkle_hash_type.hpp"
+#include "barretenberg/proof_system/types/pedersen_commitment_type.hpp"
 
-using namespace bonk;
-
-namespace plonk {
+namespace proof_system::plonk {
 class TurboComposer : public ComposerBase {
   public:
     static constexpr ComposerType type = ComposerType::TURBO;
-    static constexpr MerkleHashType merkle_hash_type = MerkleHashType::FIXED_BASE_PEDERSEN;
+    static constexpr merkle::HashType merkle_hash_type = merkle::HashType::FIXED_BASE_PEDERSEN;
+    static constexpr pedersen::CommitmentType commitment_type = pedersen::CommitmentType::FIXED_BASE_PEDERSEN;
     static constexpr size_t UINT_LOG2_BASE = 2;
     enum TurboSelectors { QM, QC, Q1, Q2, Q3, Q4, Q5, QARITH, QFIXED, QRANGE, QLOGIC, NUM };
 
@@ -23,6 +24,9 @@ class TurboComposer : public ComposerBase {
 
     virtual std::shared_ptr<proving_key> compute_proving_key() override;
     std::shared_ptr<verification_key> compute_verification_key() override;
+
+    virtual size_t get_total_circuit_size() const override { return num_gates; };
+
     void compute_witness() override;
 
     TurboProver create_prover();
@@ -226,8 +230,8 @@ class CheckGetter {
     }
 };
 
-using TurboArithmeticChecker = plonk::widget::TurboArithmeticKernel<barretenberg::fr, CheckGetter, TurboComposer>;
-using TurboRangeChecker = plonk::widget::TurboRangeKernel<barretenberg::fr, CheckGetter, TurboComposer>;
-using TurboLogicChecker = plonk::widget::TurboLogicKernel<barretenberg::fr, CheckGetter, TurboComposer>;
-using TurboFixedBaseChecker = plonk::widget::TurboFixedBaseKernel<barretenberg::fr, CheckGetter, TurboComposer>;
-} // namespace plonk
+using TurboArithmeticChecker = widget::TurboArithmeticKernel<barretenberg::fr, CheckGetter, TurboComposer>;
+using TurboRangeChecker = widget::TurboRangeKernel<barretenberg::fr, CheckGetter, TurboComposer>;
+using TurboLogicChecker = widget::TurboLogicKernel<barretenberg::fr, CheckGetter, TurboComposer>;
+using TurboFixedBaseChecker = widget::TurboFixedBaseKernel<barretenberg::fr, CheckGetter, TurboComposer>;
+} // namespace proof_system::plonk

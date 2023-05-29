@@ -1,8 +1,8 @@
 #include "blake2s_plookup.hpp"
 #include "blake_util.hpp"
 
-#include "barretenberg/plonk/composer/plookup_tables/plookup_tables.hpp"
-#include "barretenberg/plonk/composer/plookup_tables/sha256.hpp"
+#include "barretenberg/proof_system/plookup_tables/plookup_tables.hpp"
+#include "barretenberg/proof_system/plookup_tables/sha256.hpp"
 #include "barretenberg/plonk/composer/ultra_composer.hpp"
 #include "barretenberg/stdlib/primitives/bit_array/bit_array.hpp"
 #include "barretenberg/stdlib/primitives/field/field.hpp"
@@ -16,12 +16,13 @@
  * 2. replace use of uint32 with basic field_t type
  *
  **/
-namespace plonk {
+namespace proof_system::plonk {
 namespace stdlib {
 
 namespace blake2s_plookup {
 
 using plookup::ColumnIdx;
+using namespace blake_util;
 
 constexpr uint32_t blake2s_IV[8] = { 0x6A09E667UL, 0xBB67AE85UL, 0x3C6EF372UL, 0xA54FF53AUL,
                                      0x510E527FUL, 0x9B05688CUL, 0x1F83D9ABUL, 0x5BE0CD19UL };
@@ -171,4 +172,4 @@ template byte_array<plonk::UltraComposer> blake2s(const byte_array<plonk::UltraC
 } // namespace blake2s_plookup
 
 } // namespace stdlib
-} // namespace plonk
+} // namespace proof_system::plonk

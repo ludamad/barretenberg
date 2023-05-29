@@ -2,8 +2,9 @@
 #include "barretenberg/honk/pcs/claim.hpp"
 #include "shplonk.hpp"
 #include "barretenberg/honk/pcs/commitment_key.hpp"
+#include "barretenberg/honk/transcript/transcript.hpp"
 
-namespace honk::pcs::shplonk {
+namespace proof_system::honk::pcs::shplonk {
 
 /**
  * @brief Protocol for opening several polynomials, each in a single different point.
@@ -21,25 +22,17 @@ template <typename Params> class SingleBatchOpeningScheme {
 
   public:
     /**
-     * @brief Batches several single-point 'OpeningClaim' into a single 'OpeningClaim' suitable for
-     * a univariate polynomial opening scheme.
+     * @brief Compute batched quotient polynomial Q(X) = ∑ⱼ ρʲ ⋅ ( fⱼ(X) − vⱼ) / ( X − xⱼ )
      *
-     * @param ck CommitmentKey
      * @param opening_pairs list of opening pairs (xⱼ, vⱼ) for a witness polynomial fⱼ(X), s.t. fⱼ(xⱼ) = vⱼ.
      * @param witness_polynomials list of polynomials fⱼ(X).
-     * @param transcript
-     * @return Output{OpeningClaim, WitnessPolynomial, Proof}
+     * @param nu
+     * @return Polynomial Q(X)
      */
-    static ProverOutput<Params> reduce_prove(std::shared_ptr<CK> ck,
-                                             std::span<const OpeningPair<Params>> opening_pairs,
-                                             std::span<const Polynomial> witness_polynomials,
-                                             const auto& transcript)
+    static Polynomial compute_batched_quotient(std::span<const OpeningPair<Params>> opening_pairs,
+                                               std::span<const Polynomial> witness_polynomials,
+                                               const Fr& nu)
     {
-        transcript->apply_fiat_shamir("nu");
-        Fr nu = Fr::serialize_from_buffer(transcript->get_challenge("nu").begin());
-
-        const size_t num_opening_pairs = opening_pairs.size();
-
         // Find n, the maximum size of all polynomials fⱼ(X)
         size_t max_poly_size{ 0 };
         for (const auto& poly : witness_polynomials) {
@@ -50,46 +43,60 @@ template <typename Params> class SingleBatchOpeningScheme {
         Polynomial tmp(max_poly_size);
 
         Fr current_nu = Fr::one();
-        for (size_t j = 0; j < num_opening_pairs; ++j) {
+        for (size_t j = 0; j < opening_pairs.size(); ++j) {
             // (Cⱼ, xⱼ, vⱼ)
-            const auto& [query, evaluation] = opening_pairs[j];
+            const auto& [challenge, evaluation] = opening_pairs[j];
 
             // tmp = ρʲ ⋅ ( fⱼ(X) − vⱼ) / ( X − xⱼ )
             tmp = witness_polynomials[j];
             tmp[0] -= evaluation;
-            tmp.factor_roots(query);
+            tmp.factor_roots(challenge);
 
             Q.add_scaled(tmp, current_nu);
             current_nu *= nu;
         }
 
-        // [Q]
-        Commitment Q_commitment = ck->commit(Q);
-        transcript->add_element("Q", static_cast<CommitmentAffine>(Q_commitment).to_buffer());
+        // Return batched quotient polynomial Q(X)
+        return Q;
+    };
 
-        // generate random evaluation challenge "z"
-        transcript->apply_fiat_shamir("z");
-        const Fr z_challenge = Fr::serialize_from_buffer(transcript->get_challenge("z").begin());
+    /**
+     * @brief Compute partially evaluated batched quotient polynomial difference Q(X) - Q_z(X)
+     *
+     * @param opening_pairs list of opening pairs (xⱼ, vⱼ) for a witness polynomial fⱼ(X), s.t. fⱼ(xⱼ) = vⱼ.
+     * @param witness_polynomials list of polynomials fⱼ(X).
+     * @param batched_quotient_Q Q(X) = ∑ⱼ ρʲ ⋅ ( fⱼ(X) − vⱼ) / ( X − xⱼ )
+     * @param nu_challenge
+     * @param z_challenge
+     * @return Output{OpeningPair, Polynomial}
+     */
+    static ProverOutput<Params> compute_partially_evaluated_batched_quotient(
+        std::span<const OpeningPair<Params>> opening_pairs,
+        std::span<const Polynomial> witness_polynomials,
+        Polynomial&& batched_quotient_Q,
+        const Fr& nu_challenge,
+        const Fr& z_challenge)
+    {
+        const size_t num_opening_pairs = opening_pairs.size();
 
         // {ẑⱼ(r)}ⱼ , where ẑⱼ(r) = 1/zⱼ(r) = 1/(r - xⱼ)
         std::vector<Fr> inverse_vanishing_evals;
         inverse_vanishing_evals.reserve(num_opening_pairs);
-        {
-            for (const auto& pair : opening_pairs) {
-                inverse_vanishing_evals.emplace_back(z_challenge - pair.query);
-            }
-            Fr::batch_invert(inverse_vanishing_evals);
+        for (const auto& pair : opening_pairs) {
+            inverse_vanishing_evals.emplace_back(z_challenge - pair.challenge);
         }
+        Fr::batch_invert(inverse_vanishing_evals);
 
         // G(X) = Q(X) - Q_z(X) = Q(X) - ∑ⱼ ρʲ ⋅ ( fⱼ(X) − vⱼ) / ( r − xⱼ ),
         // s.t. G(r) = 0
-        Polynomial& G = Q;
+        Polynomial G(std::move(batched_quotient_Q)); // G(X) = Q(X)
 
         // G₀ = ∑ⱼ ρʲ ⋅ vⱼ / ( r − xⱼ )
-        current_nu = Fr::one();
+        Fr current_nu = Fr::one();
+        Polynomial tmp(G.size());
         for (size_t j = 0; j < num_opening_pairs; ++j) {
             // (Cⱼ, xⱼ, vⱼ)
-            const auto& [query, evaluation] = opening_pairs[j];
+            const auto& [challenge, evaluation] = opening_pairs[j];
 
             // tmp = ρʲ ⋅ ( fⱼ(X) − vⱼ) / ( r − xⱼ )
             tmp = witness_polynomials[j];
@@ -99,11 +106,11 @@ template <typename Params> class SingleBatchOpeningScheme {
             // G -= ρʲ ⋅ ( fⱼ(X) − vⱼ) / ( r − xⱼ )
             G.add_scaled(tmp, -scaling_factor);
 
-            current_nu *= nu;
+            current_nu *= nu_challenge;
         }
 
         // Return opening pair (z, 0) and polynomial G(X) = Q(X) - Q_z(X)
-        return { .opening_pair = { .query = z_challenge, .evaluation = Fr::zero() }, .witness = std::move(G) };
+        return { .opening_pair = { .challenge = z_challenge, .evaluation = Fr::zero() }, .witness = std::move(G) };
     };
 
     /**
@@ -116,12 +123,15 @@ template <typename Params> class SingleBatchOpeningScheme {
      * @return OpeningClaim
      */
     static OpeningClaim<Params> reduce_verify(std::span<const OpeningClaim<Params>> claims,
-                                              const Proof<Params>& proof,
-                                              const auto& transcript)
+                                              VerifierTranscript<Fr>& transcript)
     {
         const size_t num_claims = claims.size();
-        const Fr nu = Fr::serialize_from_buffer(transcript->get_challenge("nu").begin());
-        const Fr z_challenge = Fr::serialize_from_buffer(transcript->get_challenge("z").begin());
+
+        const Fr nu = transcript.get_challenge("Shplonk:nu");
+
+        auto Q_commitment = transcript.template receive_from_prover<CommitmentAffine>("Shplonk:Q");
+
+        const Fr z_challenge = transcript.get_challenge("Shplonk:z");
 
         // compute simulated commitment to [G] as a linear combination of
         // [Q], { [fⱼ] }, [1]:
@@ -133,17 +143,15 @@ template <typename Params> class SingleBatchOpeningScheme {
 
         // [G] = [Q] - ∑ⱼ ρʲ / ( r − xⱼ )⋅[fⱼ] + G₀⋅[1]
         //     = [Q] - [∑ⱼ ρʲ ⋅ ( fⱼ(X) − vⱼ) / ( r − xⱼ )]
-        Commitment G_commitment = proof;
+        Commitment G_commitment = Q_commitment;
 
         // {ẑⱼ(r)}ⱼ , where ẑⱼ(r) = 1/zⱼ(r) = 1/(r - xⱼ)
         std::vector<Fr> inverse_vanishing_evals;
         inverse_vanishing_evals.reserve(num_claims);
-        {
-            for (const auto& claim : claims) {
-                inverse_vanishing_evals.emplace_back(z_challenge - claim.opening_pair.query);
-            }
-            Fr::batch_invert(inverse_vanishing_evals);
+        for (const auto& claim : claims) {
+            inverse_vanishing_evals.emplace_back(z_challenge - claim.opening_pair.challenge);
         }
+        Fr::batch_invert(inverse_vanishing_evals);
 
         Fr current_nu{ Fr::one() };
         for (size_t j = 0; j < num_claims; ++j) {
@@ -166,4 +174,4 @@ template <typename Params> class SingleBatchOpeningScheme {
         return { { z_challenge, Fr::zero() }, G_commitment };
     };
 };
-} // namespace honk::pcs::shplonk
+} // namespace proof_system::honk::pcs::shplonk

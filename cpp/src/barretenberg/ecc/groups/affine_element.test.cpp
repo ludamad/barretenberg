@@ -5,6 +5,7 @@
 #include "barretenberg/common/test.hpp"
 #include <fstream>
 #include "barretenberg/common/serialize.hpp"
+#include "barretenberg/serialize/test_helper.hpp"
 
 namespace test_affine_element {
 template <typename G1> class test_affine_element : public testing::Test {
@@ -61,6 +62,19 @@ template <typename G1> class test_affine_element : public testing::Test {
         }
     }
 
+    static void test_point_compression_unsafe()
+    {
+        for (size_t i = 0; i < 100; i++) {
+            affine_element P = affine_element(element::random_element());
+            uint256_t compressed = uint256_t(P.x);
+
+            // Note that we do not check the point Q_points[1] because its highly unlikely to hit a point P on the curve
+            // such that r < P.x < q.
+            std::array<affine_element, 2> Q_points = affine_element::from_compressed_unsafe(compressed);
+            EXPECT_EQ(P, Q_points[0]);
+        }
+    }
+
     // Regression test to ensure that the point at infinity is not equal to its coordinate-wise reduction, which may lie
     // on the curve, depending on the y-coordinate.
     // TODO: add corresponding typed test class
@@ -91,6 +105,15 @@ TYPED_TEST(test_affine_element, point_compression)
     }
 }
 
+TYPED_TEST(test_affine_element, point_compression_unsafe)
+{
+    if constexpr (TypeParam::Fq::modulus.data[3] >= 0x4000000000000000ULL) {
+        TestFixture::test_point_compression_unsafe();
+    } else {
+        GTEST_SKIP();
+    }
+}
+
 // Regression test to ensure that the point at infinity is not equal to its coordinate-wise reduction, which may lie
 // on the curve, depending on the y-coordinate.
 TEST(affine_element, infinity_ordering_regression)
@@ -99,5 +122,11 @@ TEST(affine_element, infinity_ordering_regression)
 
     P.self_set_infinity();
     EXPECT_NE(P < Q, Q < P);
+}
+
+TEST(affine_element, msgpack)
+{
+    auto [actual, expected] = msgpack_roundtrip(secp256k1::g1::affine_element{ 1, 1 });
+    EXPECT_EQ(actual, expected);
 }
 } // namespace test_affine_element
